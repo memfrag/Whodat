@@ -11,8 +11,6 @@
 | **Martin** | Martin Johannesson | Utvecklare, Framna |
 | **Framna** | — | Framna-person, går inte att avgöra vem |
 
-> Talartaggningen är gjord utifrån innehåll och kontext, inte ljud. Se noterna sist i dokumentet för osäkra taggar, rättade namn och ställen som var obegripliga i råtranskriptet.
-
 ---
 
 ## Inledning
@@ -49,11 +47,9 @@
 
 **Oscar:** Absolut.
 
-**Framna:** Perfekt.
+**Michael:** Perfekt. Så det är inget konstigt.
 
-**Michael:** Så det är inget konstigt.
-
-**Oscar:** Du – det här kommer att vara möten med Oscar, alltså stickspår. Ditt jobb är att hålla mig på styr. Men med det sagt: vi har ett litet AI-stakeholderforum internt som jag försöker hålla i. Det är bara "hej runt bordet i dag, vad har ni gjort i sommar?" – det är nördar som jag som tycker det är kul. Det är en kille som har integrerat alla sina kommunikationskanaler: alla Teams-möten, alla Google-möten, all mail, allting. Och sen pratar han med en agent om det i bilen hem: "min dag var så här, det här är inspelningen, det här var viktigt i dag". Klockan 22:45 aggregerar den ihop allting, och på morgonen får han en summering: det här ska du ta tag i baserat på gårdagen. Det är så man vill jobba.
+**Oscar:** Så här kommer det att vara med möten med Oscar, alltså stickspår. Ditt jobb är att hålla mig i styr. Men med det sagt: vi har ett litet AI-stakeholderforum internt som jag försöker hålla i. Det är bara "hej runt bordet i dag, vad har ni gjort i sommar?" – det är nördar som jag som tycker det är kul. Det är en kille som har integrerat alla sina kommunikationskanaler: alla Teams-möten, alla Google-möten, all mail, allting. Och sen pratar han med en agent om det i bilen hem: "min dag var så här, det här är inspelningen, det här var viktigt i dag". Klockan 22:45 aggregerar den ihop allting, och på morgonen får han en summering: det här ska du ta tag i baserat på gårdagen. Det är så man vill jobba.
 
 **Michael:** Martin, du sitter tyst just nu – annars har mötet gått om innan vi ens har börjat.
 
@@ -111,15 +107,13 @@
 
 **Oscar:** Skitspännande.
 
-**Martin:** Det gör det verkligen. Vi kan gå över på vad jag tycker om att göra på fritiden: jag gör nästan en app om dagen hemma, för det är kul att prototypa. Sen är det opassande att säga, men jag tycker inte om att gå på gymmet – jag ska gå dit i dag i alla fall.
+**Martin:** Det är det verkligen. Vi kan gå över på vad jag tycker om att göra på fritiden: jag gör nästan en app om dagen hemma, för det är kul att prototypa. Sen är det opassande att säga, men jag tycker inte om att gå på gymmet – jag ska gå dit i dag i alla fall.
 
 **Michael:** Det finns en gymgrupp här, ni är ganska flitiga.
 
 **Martin:** Ja, tyvärr.
 
-**Framna:** Verkligen.
-
-**Framna:** Man får inspiration.
+**Michael:** Verkligen. Man får inspiration.
 
 **Helena:** Helena heter jag. Produktdesigner kommer jag vara i det här projektet, och UX också. På fritiden – jag har två ganska små barn hemma, så jag har inte någon fritid riktigt. Men jag har ett specialintresse som är städning, vilket låter jättedeppigt. Men det är också väldigt bra när man har två små barn, det går ganska väl ihop.
 
@@ -131,9 +125,7 @@
 
 **Helena:** Ja, det är jag.
 
-**Michael:** Det finns en app du kanske kan använda.
-
-**Martin:** Jag har gjort appen. Det var faktiskt inte en städapp.
+**Martin:** Jag har gjort en app du kan använda. Det är lite en städapp.
 
 **Framna:** Är det städning eller är det att hålla ordning på barnen?
 

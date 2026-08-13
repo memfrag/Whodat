@@ -20,9 +20,15 @@ transcript into paragraphs and sentences, and then you attribute them.
 - **Fix the text while you tag.** Edit any sentence in place, split one at the cursor, join
   several into one, break a paragraph in two, or delete text outright. Everything is undoable
   with `⌘Z`.
-- **Smart-ish parsing.** `Name:` prefixes are matched against the attendee list and pre-assigned,
+- **Smart-ish parsing.** Speaker prefixes are matched against the attendee list and pre-assigned,
   leading timestamps are pulled into the margin, and WebVTT/SRT scaffolding is stripped. The
   sentence splitter knows about `Dr.`, `e.g.`, initials and decimals.
+- **Already-tagged files come back tagged.** A line starting with `Martin:`, `**Martin:**`,
+  `**Martin**:`, `*Martin:*` or `**Martin (00:04:12):**` arrives pre-attributed — and stays fully
+  editable, so you can re-tag, edit or delete any of it. Because that is the exact shape of
+  Whodat's own markdown export, **an exported `.md` imports straight back**: title, date,
+  attendees, timestamps and every attribution survive the trip, and re-exporting produces a
+  byte-identical file.
 - **Nothing is lost.** Work is autosaved to the browser, and `Save .json` produces a project file
   you can reopen later or move to another machine.
 
@@ -54,7 +60,8 @@ transcript into paragraphs and sentences, and then you attribute them.
 Open `index.html` in a browser. That's the whole story — clone the repo, double-click the file,
 or serve the folder with anything you like.
 
-`sample-transcript.txt` is a short fake meeting for trying it out.
+`sample-transcript.txt` is a short fake meeting for trying it out, and `sample-transcript.md`
+is the same idea already tagged with `**Name:**` prefixes.
 
 ## License
 
