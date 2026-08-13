@@ -39,9 +39,11 @@
 
 **Michael:** Vi väntar på dig.
 
-**Michael:** Full transparens: vi hade lagt in en paus just för att det skulle vara enkelt att ta en bulle. Nu blir det ingen paus. Du förstår vad det betyder? Nu får man äta under tiden. Jag kommer ta en.
+**Michael:** Full transparens: vi hade lagt in en paus just för att det skulle vara enkelt att ta en bulle. Nu blir det ingen paus. Du förstår vad det betyder? Nu får man äta under tiden.
 
-**Oscar:** Förr eller senare tar jag en bulle också.
+**Oscar:** Jag kommer ta en.
+
+**Martin:** Förr eller senare tar jag en bulle också.
 
 **Michael:** De får inte bara ligga som prydnad. Det får de inte göra. En liten sak innan vi drar i gång: vi jobbar mer och mer, som hela branschen, med AI och AI-verktyg. Det kommer vi göra under den här fasen också – även om vi inte utvecklar så är det en del av våra verktyg nuförtiden. Därför ville jag bara kolla: är det okej att jag spelar in våra möten?
 
@@ -89,7 +91,7 @@
 
 **Michael:** Det kanske är det jag måste göra. Ska jag ha en chans där ute på KM måste jag köra tennis hela året. Ska jag lämna över till dig, Stina?
 
-**Stina:** Ja. Stina Engström heter jag och har rollen som service designer. Jag är jättený på Framna, men inte alls ny i matchen. Jag kommer närmast från Swish, där jag jobbat som tjänstedesigner och jobbat strategiskt med design. Innan det på H&M Group i många år, och innan dess på bra designbyråer, precis som den här. Jag kommer ägna mig mycket åt att förstå gästerna, men också den kundmötande personalen, skapa insikter och ta fram det här tillsammans med hela teamet. På fritiden – nu har vi ju haft ett litet försprång eftersom vi visste vad frågan var – gillar jag att sy. Det gör jag gärna och ofta, både till mig själv och till mina barn när de ber om något speciellt. Och att dansa, som jag också gör på fritiden.
+**Stina:** Ja. Stina Engström heter jag och har rollen som service designer. Jag är jättenny på Framna, men inte alls ny i matchen. Jag kommer närmast från Swish, där jag jobbat som tjänstedesigner och jobbat strategiskt med design. Innan det på H&M Group i många år, och innan dess på bra designbyråer, precis som den här. Jag kommer ägna mig mycket åt att förstå gästerna, men också den kundmötande personalen, skapa insikter och ta fram det här tillsammans med hela teamet. På fritiden – nu har vi ju haft ett litet försprång eftersom vi visste vad frågan var – gillar jag att sy. Det gör jag gärna och ofta, både till mig själv och till mina barn när de ber om något speciellt. Och att dansa, som jag också gör på fritiden.
 
 **Michael:** Kul. Vad är det för dans?
 
@@ -255,7 +257,7 @@
 
 **Stina:** Kan vi blippa vidare till den där?
 
-**Stina:** Precis. Här har vi redan börjat touchа lite: vilket material som finns. Jag förväntar mig inte att du ska veta det i dag heller, men vi kan kanske prata lite kring de olika sakerna.
+**Stina:** Precis. Här har vi redan börjat toucha lite: vilket material som finns. Jag förväntar mig inte att du ska veta det i dag heller, men vi kan kanske prata lite kring de olika sakerna.
 
 **Oscar:** Ja.
 
