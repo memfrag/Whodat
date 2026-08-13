@@ -40,6 +40,11 @@ transcript into paragraphs and sentences, and then you attribute them.
   Column roles are read from the header (`Tag`/`Tagg`, `Person`/`Namn`, `Role`/`Roll`) or from
   their order, and a dash means "not known" — so a catch-all tag like `Framna` works as its own
   participant. Roles show up in the sidebar and in the exported HTML.
+- **The setup screen fills itself in.** Drop or paste a file and the meeting title is read from its
+  top-level heading while the attendee box fills from the participants table (or an
+  `**Attendees:**` line), so you can see what was found before you start. Fields you've typed in
+  are never overwritten, and if you edit the attendee list it wins — the roster will still say who
+  a tag belongs to, but won't put back someone you took out.
 - **Round trips exactly.** All of the above is what Whodat's own markdown export writes, so an
   exported `.md` imports straight back — title, date, roster, structure, timestamps and every
   attribution survive, and re-exporting produces a byte-identical file.
@@ -52,7 +57,7 @@ transcript into paragraphs and sentences, and then you attribute them.
 | --- | --- |
 | `.html` | A standalone page — speaker filter chips, live search, print styles, light/dark. One file, no external requests. |
 | `.md` | `**Speaker (timestamp):** text` blocks, one per contiguous run of speech. |
-| `.json` | The editable project, to reopen in Whodat. |
+| `.json` | The editable project. **Open project .json** on the start screen reads it back — speakers with their colours, tags and roles, every paragraph, sentence and attribution, the structure blocks, title and date — so you can pick the work up on another machine. Autosave already covers reloading in the same browser. |
 
 ## Keyboard
 

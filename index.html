@@ -93,7 +93,9 @@ button{cursor:pointer;background:none;border:none;padding:0;letter-spacing:inher
 @media(max-width:840px){.cols{grid-template-columns:1fr;gap:8px}}
 .field{margin-bottom:26px}
 .field > label{display:block;margin-bottom:9px}
-.hint{font-size:12.5px;color:var(--fg-dim);margin:8px 0 0;line-height:1.5}
+.hint{font-size:12.5px;color:var(--fg-dim);margin:8px 0 0;line-height:1.5;transition:color .2s ease}
+.hint.found{color:var(--accent)}
+.hint.found::before{content:"✓ ";font-weight:600}
 .inp,.ta{
   width:100%;background:var(--surface);border:1px solid var(--line);border-radius:9px;
   padding:11px 13px;font-size:15px;outline:none;color:var(--fg);
@@ -336,11 +338,12 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0}
       <div class="field">
         <label class="eyebrow">Meeting title <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
         <input id="title" class="inp" placeholder="Q3 planning sync" autocomplete="off">
+        <p class="hint" id="titleHint">Taken from the file's top-level heading when you leave this empty.</p>
       </div>
       <div class="field">
         <label class="eyebrow">Attendees</label>
         <textarea id="attendees" class="ta" placeholder="Alice Chen&#10;Bob Ramirez&#10;Priya Nair"></textarea>
-        <p class="hint">One per line, or comma separated. You can add and rename people later.</p>
+        <p class="hint" id="attHint">One per line, or comma separated. You can add and rename people later.</p>
       </div>
       <div class="field">
         <label class="eyebrow">Parsing</label>
@@ -585,13 +588,14 @@ function looksLikeName(s){
   return w.every(x => /^[\p{Lu}\p{Lo}][\p{L}''\-.]*$/u.test(x) || /^[\p{Lu}]+$/u.test(x));
 }
 
-/* Consumes the front matter a markdown transcript carries — title, date line,
-   the rule under it, an "**Attendees:**" line and a participants table — so none
-   of it turns into speech to tag. Headings and dividers pass through here and
-   become structural blocks further down. Front matter ends at the first line of
-   actual speech, so a participants table under a "## Deltagare" heading is still
-   read as participants. */
-function stripMarkdownFurniture(text, opts, found){
+/* Reads the front matter a markdown transcript carries — title, date line, the
+   rule under it, an "**Attendees:**" line and a participants table — into `found`
+   and strips it from the text, so none of it turns into speech to tag. Pure with
+   respect to app state, which is what lets the setup screen peek at a pasted file
+   before anything is created. Headings and dividers pass through and become
+   structural blocks further down. Front matter ends at the first line of actual
+   speech, so a table under a "## Deltagare" heading is still read as participants. */
+function stripMarkdownFurniture(text, found){
   const lines = text.split("\n");
   const keep = [];
   let front = true;
@@ -613,7 +617,7 @@ function stripMarkdownFurniture(text, opts, found){
         while(j < lines.length && TABLE_ROW_RE.test(lines[j])) rows.push(lines[j++]);
         const people = tablePeople(rows);
         if(people.length){
-          people.forEach(p => upsertSpeaker(p.tag, p.name, p.role));
+          found.people.push(...people);
           found.rosterHead = cellsOf(rows[0]);   // keep the author's own column names
           i = j - 1; continue;
         }
@@ -621,7 +625,7 @@ function stripMarkdownFurniture(text, opts, found){
       const em = matchEmphasisPrefix(line);
       if(em && ATTENDEES_RE.test(em.name)){
         em.rest.split(/[,;]+/).map(s => s.trim()).filter(Boolean)
-               .forEach(n => upsertSpeaker(null, n, null));
+               .forEach(n => found.people.push({ tag:null, name:n, role:null }));
         continue;
       }
       front = false;
@@ -658,15 +662,37 @@ function expandUnits(chunk){
   return units;
 }
 
+// Front matter only — lets the setup screen show what a pasted file contains
+// without touching app state.
+function peekFrontMatter(raw){
+  const found = { title:"", date:"", people:[] };
+  stripMarkdownFurniture(String(raw).replace(/\r\n?/g,"\n"), found);
+  return found;
+}
+
 function parseTranscript(raw, opts){
-  const found = { title:"", date:"" };
+  const found = { title:"", date:"", people:[] };
   let text = String(raw).replace(/\r\n?/g,"\n").replace(/ /g," ");
   text = text.replace(/^WEBVTT.*$/m,"")
              .replace(/^\d+\s*$/gm,"")
              .replace(/^\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->.*$/gm, m => {
                const t = m.match(/^(\d{1,2}:\d{2}:\d{2})/); return t ? "["+t[1]+"] " : "";
              });
-  if(opts.markdown) text = stripMarkdownFurniture(text, opts, found);
+  if(opts.markdown){
+    text = stripMarkdownFurniture(text, found);
+    found.people.forEach(p => upsertSpeaker(p.tag, p.name, p.role, opts.rosterAdds !== false));
+  }
+  // If a tag turns up in the body for someone not on the list, the roster still
+  // knows who that is — bring them in with their name and role, not as a bare tag.
+  const roster = new Map();
+  found.people.forEach(p => {
+    if(p.tag) roster.set(p.tag.toLowerCase(), p);
+    if(p.name) roster.set(p.name.toLowerCase(), p);
+  });
+  const newSpeakerFor = label => {
+    const r = roster.get(String(label).trim().toLowerCase());
+    return r ? upsertSpeaker(r.tag, r.name, r.role, true) : addSpeaker(label);
+  };
 
   const chunks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split(/\n+/);
   const paras = [];
@@ -704,7 +730,7 @@ function parseTranscript(raw, opts){
         } else {
           const known = findSpeakerByName(em.name);
           if(known || (opts.addNames && looksLikeName(em.name))){
-            spk = known || addSpeaker(em.name);
+            spk = known || newSpeakerFor(em.name);
             body = em.rest; labelled = true;
             if(!time && em.time && TIME_RE.test(em.time)) time = em.time;
           }
@@ -717,7 +743,7 @@ function parseTranscript(raw, opts){
           const known = findSpeakerByName(cand);
           if(UNATTRIBUTED_RE.test(cand)) body = body.slice(m[0].length);
           else if(known){ spk = known; body = body.slice(m[0].length); }
-          else if(opts.addNames && looksLikeName(cand)){ spk = addSpeaker(cand); body = body.slice(m[0].length); }
+          else if(opts.addNames && looksLikeName(cand)){ spk = newSpeakerFor(cand); body = body.slice(m[0].length); }
         }
       }
       if(!time && opts.time){
@@ -748,14 +774,16 @@ function findSpeakerByName(name){
 
 // Adds or enriches a person from a roster: the tag is what the transcript says,
 // the name is who that is, and either may arrive first.
-function upsertSpeaker(tag, name, role){
+function upsertSpeaker(tag, name, role, create){
   const key = (name || tag || "").trim();
   if(!key) return null;
   const low = s => (s || "").trim().toLowerCase();
   let s = (tag && state.speakers.find(x => low(x.tag) === low(tag)))
        || state.speakers.find(x => low(x.name) === low(key))
-       || (tag ? state.speakers.find(x => low(x.name) === low(tag)) : null)
-       || addSpeaker(key);
+       || (tag ? state.speakers.find(x => low(x.name) === low(tag)) : null);
+  // With an edited attendee list the list wins: the roster may still say who a
+  // tag belongs to, but it may not put back someone the user took out.
+  if(!s){ if(create === false) return null; s = addSpeaker(key); }
   if(!s) return null;
   if(name && s.name !== name) s.name = name;   // "Oscar" upgrades to "Oscar Edholm"
   if(tag) s.tag = tag;
@@ -1337,9 +1365,64 @@ $("#pick").onclick = () => $("#file").click();
 $("#file").onchange = e => { const f = e.target.files[0]; if(f) readFile(f); };
 function readFile(f){
   const r = new FileReader();
-  r.onload = () => { $("#rawtext").value = r.result; $("#dropTxt").textContent = f.name + " loaded"; };
+  r.onload = () => {
+    $("#rawtext").value = r.result;
+    $("#dropTxt").textContent = f.name + " loaded";
+    offerFrontMatter();
+  };
   r.readAsText(f);
 }
+
+/* Show what the pasted or dropped file already tells us — its heading and its
+   participants — rather than making people retype it. Only ever fills fields the
+   user hasn't touched, and takes back its own guess if the next paste has none. */
+const HINT_TITLE = $("#titleHint").textContent;
+const HINT_ATT = $("#attHint").textContent;
+let titleTouched = false, attTouched = false;
+let titleAuto = false, attAuto = false;
+
+$("#title").addEventListener("input", () => { titleTouched = true; });
+$("#attendees").addEventListener("input", () => { attTouched = true; });
+
+function offerFrontMatter(){
+  const raw = $("#rawtext").value;
+  const found = ($("#optMd").checked && raw.trim()) ? peekFrontMatter(raw) : { title:"", people:[] };
+
+  if(!titleTouched){
+    if(found.title){
+      $("#title").value = found.title; titleAuto = true;
+      $("#titleHint").textContent = "Read from the file's heading — edit it if you like.";
+      $("#titleHint").classList.add("found");
+    } else if(titleAuto){
+      $("#title").value = ""; titleAuto = false;
+      $("#titleHint").textContent = HINT_TITLE;
+      $("#titleHint").classList.remove("found");
+    }
+  }
+
+  if(!attTouched){
+    const people = found.people || [];
+    if(people.length){
+      $("#attendees").value = people.map(p => p.name || p.tag).join("\n");
+      attAuto = true;
+      const roles = people.filter(p => p.role).length;
+      $("#attHint").textContent = people.length + (people.length === 1 ? " person" : " people") +
+        " read from the transcript" + (roles ? " — tags and roles come along too." : ".");
+      $("#attHint").classList.add("found");
+    } else if(attAuto){
+      $("#attendees").value = ""; attAuto = false;
+      $("#attHint").textContent = HINT_ATT;
+      $("#attHint").classList.remove("found");
+    }
+  }
+}
+
+let peekTimer = null;
+$("#rawtext").addEventListener("input", () => {
+  clearTimeout(peekTimer);
+  peekTimer = setTimeout(offerFrontMatter, 220);
+});
+$("#optMd").addEventListener("change", offerFrontMatter);
 const drop = $("#drop");
 ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
@@ -1367,7 +1450,8 @@ $("#start").onclick = () => {
   $("#attendees").value.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).forEach(addSpeaker);
   const parsed = parseTranscript(raw, {
     prefix: $("#optPrefix").checked, addNames: $("#optAdd").checked,
-    time: $("#optTime").checked, markdown: $("#optMd").checked });
+    time: $("#optTime").checked, markdown: $("#optMd").checked,
+    rosterAdds: !attTouched });
   state.paragraphs = parsed.paragraphs;
   if(!state.title && parsed.title) state.title = parsed.title;   // markdown heading
   if(parsed.date) state.date = parsed.date;                      // markdown date line
