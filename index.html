@@ -676,12 +676,39 @@ function expandUnits(chunk){
   return units;
 }
 
-// Front matter only — lets the setup screen show what a pasted file contains
-// without touching app state.
+/* What a pasted file already tells us, without touching app state: its heading,
+   its roster, and the speakers its own labels name. The setup screen shows this
+   so the attendee box lists exactly who will exist once tagging starts. */
 function peekFrontMatter(raw){
   const found = { title:"", date:"", people:[] };
-  stripMarkdownFurniture(String(raw).replace(/\r\n?/g,"\n"), found);
+  found.body = stripMarkdownFurniture(String(raw).replace(/\r\n?/g,"\n"), found);
   return found;
+}
+
+// Speakers named by the transcript's own prefixes — "**Martin:**", "Martin:".
+function detectSpeakerNames(text){
+  const names = [], seen = new Set();
+  const byBlank = /\n[ \t]*\n/.test(text);
+  expandUnits(text).forEach(unit => {
+    if(unit.type !== "text") return;
+    (byBlank ? unit.text.split(/\n[ \t]*\n+/) : unit.text.split(/\n+/)).forEach(chunk => {
+      let body = chunk.replace(/\n+/g," ").trim();
+      if(!body) return;
+      const t = body.match(TIME_RE);
+      if(t) body = body.slice(t[0].length);
+      let cand = null;
+      const em = matchEmphasisPrefix(body);
+      if(em) cand = em.name;
+      else {
+        const m = body.match(PREFIX_RE);
+        if(m) cand = m[1].replace(/\s*\(.*?\)\s*$/,"").trim();
+      }
+      if(!cand || UNATTRIBUTED_RE.test(cand) || !looksLikeName(cand)) return;
+      const k = cand.toLowerCase();
+      if(!seen.has(k)){ seen.add(k); names.push(cand); }
+    });
+  });
+  return names;
 }
 
 function parseTranscript(raw, opts){
@@ -1131,7 +1158,8 @@ function renderSpeakers(){
 }
 
 function renderCmd(){
-  $("#cmd").classList.toggle("on", sel.size > 0 && !editing);
+  $("#cmd").classList.toggle("on",
+    sel.size > 0 && !editing && $("#app").classList.contains("on"));
   if(!sel.size) return;
   $("#cmdCount").textContent = sel.size + " selected";
   $("#cmdChips").innerHTML = state.speakers.map((s,i) => `
@@ -1443,7 +1471,20 @@ $("#attendees").addEventListener("input", () => { attTouched = true; });
 
 function offerFrontMatter(){
   const raw = $("#rawtext").value;
-  const found = ($("#optMd").checked && raw.trim()) ? peekFrontMatter(raw) : { title:"", people:[] };
+  const md = $("#optMd").checked;
+  const found = (md && raw.trim()) ? peekFrontMatter(raw) : { title:"", people:[], body:raw };
+
+  // Everyone the file names: the roster first, then the speakers its own labels
+  // introduce — but only if those would actually be added when tagging starts.
+  const roster = (found.people || []).map(p => p.name || p.tag).filter(Boolean);
+  const known = new Set(roster.map(n => n.toLowerCase()));
+  let detected = [];
+  if(raw.trim() && $("#optPrefix").checked && $("#optAdd").checked){
+    detected = detectSpeakerNames(found.body || raw)
+      .filter(n => !known.has(n.toLowerCase()) &&
+                   !(found.people || []).some(p => (p.tag || "").toLowerCase() === n.toLowerCase()));
+  }
+  const everyone = roster.concat(detected);
 
   if(!titleTouched){
     if(found.title){
@@ -1458,13 +1499,15 @@ function offerFrontMatter(){
   }
 
   if(!attTouched){
-    const people = found.people || [];
-    if(people.length){
-      $("#attendees").value = people.map(p => p.name || p.tag).join("\n");
+    if(everyone.length){
+      $("#attendees").value = everyone.join("\n");
       attAuto = true;
-      const roles = people.filter(p => p.role).length;
-      $("#attHint").textContent = people.length + (people.length === 1 ? " person" : " people") +
-        " read from the transcript" + (roles ? " — tags and roles come along too." : ".");
+      const roles = (found.people || []).filter(p => p.role).length;
+      const where = roster.length && detected.length
+          ? roster.length + " from the participants table, " + detected.length + " more named in the transcript"
+        : roster.length ? roster.length + (roster.length === 1 ? " person" : " people") + " from the participants table"
+        : detected.length + (detected.length === 1 ? " speaker" : " speakers") + " named in the transcript";
+      $("#attHint").textContent = where + (roles ? " — tags and roles come along too." : ".");
       $("#attHint").classList.add("found");
     } else if(attAuto){
       $("#attendees").value = ""; attAuto = false;
@@ -1479,7 +1522,8 @@ $("#rawtext").addEventListener("input", () => {
   clearTimeout(peekTimer);
   peekTimer = setTimeout(offerFrontMatter, 220);
 });
-$("#optMd").addEventListener("change", offerFrontMatter);
+["#optMd","#optPrefix","#optAdd","#optTime"].forEach(id =>
+  $(id).addEventListener("change", offerFrontMatter));
 const drop = $("#drop");
 ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));

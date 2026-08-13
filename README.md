@@ -42,10 +42,12 @@ transcript into paragraphs and sentences, and then you attribute them.
   their order, and a dash means "not known" — so a catch-all tag like `Framna` works as its own
   participant. Roles show up in the sidebar and in the exported HTML.
 - **The setup screen fills itself in.** Drop or paste a file and the meeting title is read from its
-  top-level heading while the attendee box fills from the participants table (or an
-  `**Attendees:**` line), so you can see what was found before you start. Fields you've typed in
-  are never overwritten, and if you edit the attendee list it wins — the roster will still say who
-  a tag belongs to, but won't put back someone you took out.
+  top-level heading, while the attendee box lists everyone the file names — from a participants
+  table, an `**Attendees:**` line, or simply the speaker labels used in the transcript itself. It
+  is a preview of exactly who will exist once you press start, and it follows the parsing options:
+  turn off *add unknown detected names* and the detected ones drop out again. Fields you've typed
+  in are never overwritten, and if you edit the list it wins — the roster will still say who a tag
+  belongs to, but won't put back someone you took out.
 - **Round trips exactly.** All of the above is what Whodat's own markdown export writes, so an
   exported `.md` imports straight back — title, date, roster, structure, timestamps and every
   attribution survive, and re-exporting produces a byte-identical file.

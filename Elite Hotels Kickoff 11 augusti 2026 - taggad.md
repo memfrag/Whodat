@@ -9,7 +9,7 @@
 | **Stina** | Stina Engström | Designer, Framna |
 | **Helena** | Helena Scröder | Designer, Framna |
 | **Martin** | Martin Johannesson | Utvecklare, Framna |
-| **Framna** | — | Framna-person, går inte att avgöra vem |
+| **Framna (vem?)** | — | Framna-person, går inte att avgöra vem |
 
 ---
 
