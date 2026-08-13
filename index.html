@@ -165,7 +165,11 @@ button{cursor:pointer;background:none;border:none;padding:0;letter-spacing:inher
   width:17px;height:17px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;flex:none;
 }
 .spk .dot{width:9px;height:9px;border-radius:3px;flex:none;background:var(--sc)}
-.spk .nm{flex:1;font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.spk .who2{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.spk.tall{align-items:flex-start;padding-top:7px}
+.spk.tall .key,.spk.tall .dot,.spk.tall .ct,.spk.tall .x{margin-top:2px}
+.spk .role{font-size:11px;color:var(--fg-dim);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:4px}
+.spk .nm{font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   outline:none;border-radius:4px;padding:1px 4px;margin-left:-4px}
 .spk .nm:focus{background:var(--surface-3);box-shadow:0 0 0 2px var(--sel-line)}
 .spk .ct{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--fg-dim);flex:none}
@@ -210,6 +214,24 @@ kbd{
   opacity:0;transition:opacity .13s ease,background .13s ease,color .13s ease}
 .para:hover .pbtn{opacity:1}
 .pbtn:hover{background:var(--surface-3);color:var(--fg)}
+
+/* structural blocks: headings, dividers and preserved tables — never tagged */
+.para.struct{border-left-color:transparent;padding-left:18px}
+.para.struct .hd{margin:0;letter-spacing:-.025em;line-height:1.25}
+.para.heading{margin-top:26px}
+.para.heading h2{font-size:22px;font-weight:600}
+.para.heading h3{font-size:18px;font-weight:600}
+.para.heading h4,.para.heading h5,.para.heading h6{font-size:15.5px;font-weight:600}
+.hsent{color:var(--fg);border-bottom:none}
+.para.heading .hd::after{content:"";display:block;height:1px;background:var(--line);margin-top:8px}
+hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0}
+.mdtable{border-collapse:collapse;font-size:13.5px;width:100%;margin:2px 0}
+.mdtable th,.mdtable td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+.mdtable th{font-weight:600;background:var(--surface-2);color:var(--fg-mid)}
+.dropbtn{position:absolute;left:-22px;top:10px;width:18px;height:18px;border-radius:5px;display:grid;
+  place-items:center;font-size:10px;color:var(--fg-dim);opacity:0;transition:opacity .13s,color .13s,background .13s}
+.para.struct:hover .dropbtn{opacity:1}
+.dropbtn:hover{background:var(--surface-3);color:var(--danger)}
 
 .body{min-width:0}
 .run{-webkit-box-decoration-break:clone;box-decoration-break:clone}
@@ -326,6 +348,7 @@ kbd{
           <label class="opt"><input type="checkbox" id="optPrefix" checked><span>Detect <code>Name:</code> and <code>**Name:**</code> prefixes and pre-assign them</span></label>
           <label class="opt"><input type="checkbox" id="optAdd" checked><span>Add unknown detected names as attendees</span></label>
           <label class="opt"><input type="checkbox" id="optTime" checked><span>Pull leading timestamps into the margin</span></label>
+          <label class="opt"><input type="checkbox" id="optMd" checked><span>Keep markdown structure — headings, <code>---</code> dividers, and a participants table of tag / person / role</span></label>
         </div>
       </div>
     </div>
@@ -497,8 +520,48 @@ const PREFIX_RE = /^\s*([^:\n]{1,48}?)\s*:\s+/;
 const EMPH_RE = /^\s*(\*\*|__|\*|_)([^\n]{1,64}?)\1\s*(:?)[ \t]+/;
 const RULE_RE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const UNATTRIBUTED_RE = /^unattributed$/i;   // the placeholder our own export writes
-const H1_RE = /^\s*#{1,6}\s+(.+?)\s*$/;
+const HEADING_RE = /^\s*(#{1,6})\s+(.+?)\s*$/;
 const DATE_LINE_RE = /^\s*[*_]{1,2}\s*(\d{4}-\d{2}-\d{2})\s*[*_]{1,2}\s*$/;
+const TABLE_ROW_RE = /^\s*\|(.+)\|\s*$/;
+const TABLE_SEP_RE = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/;
+const ATTENDEES_RE = /^(?:attendees|participants|present|deltagare|närvarande|medverkande)$/i;
+
+const stripEmphasis = s => String(s)
+  .replace(/^\s*(\*\*|__|\*|_|`)([\s\S]*?)\1\s*$/, "$2").trim();
+const blankish = s => !s || /^(?:[-–—]+|\?|n\/a|–)$/i.test(s.trim());
+const cellsOf = row => row.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(stripEmphasis);
+
+/* A participants table maps the tag used in the transcript to a real person:
+
+     | Tagg   | Person          | Roll                  |
+     |--------|-----------------|-----------------------|
+     | **Oscar** | Oscar Edholm | CDO, Elite Hotels     |
+     | **Framna** | —           | Framna-person, oklart |
+
+   Column roles come from the header when it names them (tag / person / roll…),
+   otherwise from their order. A dash in a cell means "not known". */
+function tablePeople(rows){
+  if(rows.length < 2 || !TABLE_SEP_RE.test(rows[1])) return [];
+  const head = cellsOf(rows[0]).map(h => h.toLowerCase());
+  let iTag = 0, iName = 1, iRole = 2;
+  const find = re => head.findIndex(h => re.test(h));
+  const t = find(/^(tag|tagg|label|etikett|kod)$/), n = find(/^(person|name|namn|deltagare|who)$/),
+        r = find(/^(role|roll|title|titel|funktion)$/);
+  if(t >= 0 || n >= 0 || r >= 0){
+    iTag = t; iName = n; iRole = r;
+    if(iTag < 0 && iName >= 0) iTag = iName;   // a table of names only
+  }
+  const out = [];
+  for(let i=2;i<rows.length;i++){
+    if(TABLE_SEP_RE.test(rows[i])) continue;
+    const c = cellsOf(rows[i]);
+    const val = i2 => (i2 >= 0 && i2 < c.length && !blankish(c[i2])) ? c[i2] : null;
+    const tag = val(iTag), name = val(iName), role = val(iRole);
+    if(!tag && !name) continue;
+    out.push({ tag, name, role });
+  }
+  return out;
+}
 
 // Returns {name, time, rest} when a paragraph opens with an emphasised speaker label.
 function matchEmphasisPrefix(body){
@@ -522,27 +585,77 @@ function looksLikeName(s){
   return w.every(x => /^[\p{Lu}\p{Lo}][\p{L}''\-.]*$/u.test(x) || /^[\p{Lu}]+$/u.test(x));
 }
 
-// Drops the front matter a markdown transcript carries — its title, a lone date
-// line, horizontal rules — and seeds the attendee list from an "**Attendees:**"
-// line rather than letting it become a speaker named "Attendees".
+/* Consumes the front matter a markdown transcript carries — title, date line,
+   the rule under it, an "**Attendees:**" line and a participants table — so none
+   of it turns into speech to tag. Headings and dividers pass through here and
+   become structural blocks further down. Front matter ends at the first line of
+   actual speech, so a participants table under a "## Deltagare" heading is still
+   read as participants. */
 function stripMarkdownFurniture(text, opts, found){
+  const lines = text.split("\n");
   const keep = [];
-  let seenBody = false;
-  for(const line of text.split("\n")){
-    if(RULE_RE.test(line)) continue;
-    const d = line.match(DATE_LINE_RE);
-    if(d){ if(!found.date) found.date = d[1]; continue; }
-    const h = line.match(H1_RE);
-    if(h && !seenBody){ if(!found.title) found.title = h[1]; continue; }
-    const em = matchEmphasisPrefix(line);
-    if(em && /^attendees$/i.test(em.name)){
-      if(opts.addNames) em.rest.split(/[,;]+/).map(s => s.trim()).filter(Boolean).forEach(addSpeaker);
-      continue;
+  let front = true;
+  for(let i=0;i<lines.length;i++){
+    const line = lines[i];
+    if(front){
+      if(!line.trim()){ keep.push(line); continue; }
+      if(RULE_RE.test(line)) continue;                       // rule under the title
+      const d = line.match(DATE_LINE_RE);
+      if(d){ if(!found.date) found.date = d[1]; continue; }
+      const h = line.match(HEADING_RE);
+      if(h){
+        if(h[1].length === 1 && !found.title){ found.title = h[2]; continue; }
+        keep.push(line); continue;                            // section heading
+      }
+      if(TABLE_ROW_RE.test(line)){
+        let j = i;
+        const rows = [];
+        while(j < lines.length && TABLE_ROW_RE.test(lines[j])) rows.push(lines[j++]);
+        const people = tablePeople(rows);
+        if(people.length){
+          people.forEach(p => upsertSpeaker(p.tag, p.name, p.role));
+          found.rosterHead = cellsOf(rows[0]);   // keep the author's own column names
+          i = j - 1; continue;
+        }
+      }
+      const em = matchEmphasisPrefix(line);
+      if(em && ATTENDEES_RE.test(em.name)){
+        em.rest.split(/[,;]+/).map(s => s.trim()).filter(Boolean)
+               .forEach(n => upsertSpeaker(null, n, null));
+        continue;
+      }
+      front = false;
     }
-    if(line.trim()) seenBody = true;
     keep.push(line);
   }
   return keep.join("\n");
+}
+
+/* Splits one chunk into structural units so a heading or a divider sitting
+   flush against a paragraph still becomes its own block. */
+function expandUnits(chunk){
+  const units = [];
+  let buf = [];
+  const flush = () => { const t = buf.join("\n").trim(); if(t) units.push({ type:"text", text:t }); buf = []; };
+  const lines = chunk.split("\n");
+  for(let i=0;i<lines.length;i++){
+    const line = lines[i];
+    const h = line.match(HEADING_RE);
+    if(h){ flush(); units.push({ type:"heading", level:h[1].length, text:h[2] }); continue; }
+    if(RULE_RE.test(line)){ flush(); units.push({ type:"divider" }); continue; }
+    if(TABLE_ROW_RE.test(line)){
+      let j = i;
+      const rows = [];
+      while(j < lines.length && TABLE_ROW_RE.test(lines[j])) rows.push(lines[j++]);
+      if(rows.length >= 2 && TABLE_SEP_RE.test(rows[1])){
+        flush(); units.push({ type:"table", rows });
+        i = j - 1; continue;
+      }
+    }
+    buf.push(line);
+  }
+  flush();
+  return units;
 }
 
 function parseTranscript(raw, opts){
@@ -553,12 +666,29 @@ function parseTranscript(raw, opts){
              .replace(/^\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->.*$/gm, m => {
                const t = m.match(/^(\d{1,2}:\d{2}:\d{2})/); return t ? "["+t[1]+"] " : "";
              });
-  if(opts.prefix) text = stripMarkdownFurniture(text, opts, found);
+  if(opts.markdown) text = stripMarkdownFurniture(text, opts, found);
 
   const chunks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split(/\n+/);
   const paras = [];
-  for(const chunk of chunks){
-    let body = chunk.replace(/\n+/g," ").trim();
+  const units = [];
+  chunks.forEach(chunk => {
+    if(opts.markdown) units.push(...expandUnits(chunk));
+    else if(chunk.trim()) units.push({ type:"text", text:chunk });
+  });
+
+  for(const unit of units){
+    if(unit.type === "heading"){
+      paras.push({ id:nid(), kind:"heading", level:unit.level, time:null,
+                   sentences:[{ id:nid(), text:unit.text, speakerId:null }] });
+      continue;
+    }
+    if(unit.type === "divider"){ paras.push({ id:nid(), kind:"divider", time:null, sentences:[] }); continue; }
+    if(unit.type === "table"){
+      paras.push({ id:nid(), kind:"table", time:null, sentences:[],
+                   rows: unit.rows.map(r => r.trim()) });
+      continue;
+    }
+    let body = unit.text.replace(/\n+/g," ").trim();
     if(!body) continue;
     let time = null, spk = null;
     if(opts.time){
@@ -597,23 +727,45 @@ function parseTranscript(raw, opts){
     }
     body = body.trim();
     if(!body) continue;
-    paras.push({ id:nid(), time,
+    paras.push({ id:nid(), kind:"speech", time,
       sentences: splitSentences(body).map(t => ({ id:nid(), text:t, speakerId: spk ? spk.id : null })) });
   }
-  return { paragraphs: paras, title: found.title, date: found.date };
+  return { paragraphs: paras, title: found.title, date: found.date, rosterHead: found.rosterHead };
 }
 
 /* ── speakers ─────────────────────────────────────────────── */
 function findSpeakerByName(name){
   if(!name) return null;
   const n = name.trim().toLowerCase();
-  let hit = state.speakers.find(s => s.name.toLowerCase() === n);
-  if(hit) return hit;
-  return state.speakers.find(s => {                     // "Alice" ↔ "Alice Chen"
-    const sn = s.name.toLowerCase();
-    return sn.split(/\s+/)[0] === n.split(/\s+/)[0] && (sn.startsWith(n) || n.startsWith(sn));
-  }) || null;
+  return state.speakers.find(s => (s.tag || "").toLowerCase() === n)      // the transcript's tag
+      || state.speakers.find(s => s.name.toLowerCase() === n)
+      || state.speakers.find(s => {                                       // "Alice" ↔ "Alice Chen"
+           const sn = s.name.toLowerCase();
+           return sn.split(/\s+/)[0] === n.split(/\s+/)[0] && (sn.startsWith(n) || n.startsWith(sn));
+         })
+      || null;
 }
+
+// Adds or enriches a person from a roster: the tag is what the transcript says,
+// the name is who that is, and either may arrive first.
+function upsertSpeaker(tag, name, role){
+  const key = (name || tag || "").trim();
+  if(!key) return null;
+  const low = s => (s || "").trim().toLowerCase();
+  let s = (tag && state.speakers.find(x => low(x.tag) === low(tag)))
+       || state.speakers.find(x => low(x.name) === low(key))
+       || (tag ? state.speakers.find(x => low(x.name) === low(tag)) : null)
+       || addSpeaker(key);
+  if(!s) return null;
+  if(name && s.name !== name) s.name = name;   // "Oscar" upgrades to "Oscar Edholm"
+  if(tag) s.tag = tag;
+  if(role) s.role = role;
+  return s;
+}
+
+// What the transcript calls this person — used as the label in markdown export.
+const labelOf = s => (s && (s.tag || s.name)) || "Unattributed";
+const isSpeech = p => !p.kind || p.kind === "speech";
 function addSpeaker(name){
   const clean = String(name).trim();
   if(!clean) return null;
@@ -628,12 +780,12 @@ const speakerOf = id => id ? state.speakers.find(s => s.id === id) || null : nul
 /* ══════════════════════════════════════════════════════════
    history
    ══════════════════════════════════════════════════════════ */
-const snap = () => JSON.stringify({ title:state.title, date:state.date,
+const snap = () => JSON.stringify({ title:state.title, date:state.date, rosterHead:state.rosterHead,
                                     speakers:state.speakers, paragraphs:state.paragraphs });
 function commit(){ past.push(snap()); if(past.length > 120) past.shift(); future.length = 0; }
 function restore(json){
   const o = JSON.parse(json);
-  state.title = o.title; state.date = o.date;
+  state.title = o.title; state.date = o.date; state.rosterHead = o.rosterHead;
   state.speakers = o.speakers; state.paragraphs = o.paragraphs;
   const live = new Set();
   state.paragraphs.forEach(p => p.sentences.forEach(s => live.add(s.id)));
@@ -678,7 +830,10 @@ function clearSel(){ sel.clear(); anchor = null; editing = null; render(); }
 function assign(speakerId){
   if(!sel.size) return;
   commit();
-  state.paragraphs.forEach(p => p.sentences.forEach(s => { if(sel.has(s.id)) s.speakerId = speakerId; }));
+  state.paragraphs.forEach(p => {
+    if(!isSpeech(p)) return;                     // headings and dividers have no speaker
+    p.sentences.forEach(s => { if(sel.has(s.id)) s.speakerId = speakerId; });
+  });
   render(); save();
 }
 function nextAfterSelection(){
@@ -696,7 +851,7 @@ function deleteSelected(){
   commit();
   const next = nextAfterSelection();
   state.paragraphs.forEach(p => p.sentences = p.sentences.filter(s => !sel.has(s.id)));
-  state.paragraphs = state.paragraphs.filter(p => p.sentences.length);
+  state.paragraphs = state.paragraphs.filter(p => p.sentences.length || !isSpeech(p) && p.kind !== "heading");
   sel = new Set(); anchor = null;
   if(next){ sel.add(next); anchor = next; }
   render(); save();
@@ -705,6 +860,7 @@ function joinSelected(){
   const chosen = selectedFlat();
   if(chosen.length < 2) return toast("Select two or more sentences to join");
   const p = chosen[0].p;
+  if(!isSpeech(p)) return toast("That's a heading, not speech");
   if(!chosen.every(c => c.p === p)) return toast("Join only works inside one paragraph");
   const idxs = chosen.map(c => c.si).sort((a,b) => a-b);
   if(idxs[idxs.length-1] - idxs[0] !== idxs.length-1) return toast("Selection must be contiguous");
@@ -720,6 +876,7 @@ function breakParagraph(){
   const chosen = selectedFlat();
   if(chosen.length !== 1) return toast("Select one sentence to break the paragraph there");
   const { p, si, pi } = chosen[0];
+  if(!isSpeech(p)) return toast("That's a heading, not speech");
   if(si === 0) return toast("Already the start of a paragraph");
   commit();
   const tail = p.sentences.splice(si);
@@ -774,6 +931,17 @@ function runsOf(p){
   return runs;
 }
 
+// Renders a preserved markdown table as a real table (header row, then body).
+function renderTable(rows){
+  if(!rows || !rows.length) return "";
+  const body = rows.filter(r => !TABLE_SEP_RE.test(r));
+  const head = TABLE_SEP_RE.test(rows[1] || "") ? body.shift() : null;
+  return `<table class="mdtable">`
+    + (head ? `<thead><tr>${cellsOf(head).map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>` : "")
+    + `<tbody>${body.map(r => `<tr>${cellsOf(r).map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>`
+    + `</table>`;
+}
+
 function render(){
   $("#sheetTitle").textContent = state.title || "Untitled meeting";
   $("#sheetSub").textContent = [state.date, state.speakers.map(s => s.name).join(" · ")]
@@ -782,6 +950,34 @@ function render(){
 
   let html = "";
   state.paragraphs.forEach(p => {
+    if(p.kind === "divider"){
+      html += `<div class="para struct" data-p="${p.id}"><hr class="divider">`
+           +  `<button class="dropbtn" data-drop="${p.id}" title="Remove this divider">✕</button></div>`;
+      return;
+    }
+    if(p.kind === "table"){
+      html += `<div class="para struct" data-p="${p.id}">`
+           +  `<button class="dropbtn" data-drop="${p.id}" title="Remove this table">✕</button>`
+           +  renderTable(p.rows) + `</div>`;
+      return;
+    }
+    if(p.kind === "heading"){
+      const s = p.sentences[0];
+      const lvl = Math.min(6, Math.max(2, p.level || 2));
+      html += `<div class="para struct heading" data-p="${p.id}">`;
+      if(editing === s.id){
+        html += `<textarea class="sedit" data-edit="${s.id}">${esc(s.text)}</textarea>`
+             +  `<span class="edittools">`
+             +    `<button class="btn sm primary" data-act="esave">Save</button>`
+             +    `<button class="btn sm ghost" data-act="ecancel">Cancel</button>`
+             +    `<span class="note">⌘↩ save · esc cancel</span></span>`;
+      } else {
+        html += `<h${lvl} class="hd"><span class="sent hsent${sel.has(s.id) ? " sel" : ""}" `
+             +  `data-s="${s.id}">${esc(s.text)}</span></h${lvl}>`;
+      }
+      html += `</div>`;
+      return;
+    }
     const runs = runsOf(p);
     const first = speakerOf(runs[0] && runs[0].speakerId);
     // Only call out speaker changes when the paragraph genuinely holds more than
@@ -833,10 +1029,16 @@ function renderSpeakers(){
     if(s.speakerId) counts[s.speakerId] = (counts[s.speakerId] || 0) + 1;
   }));
   $("#spklist").innerHTML = state.speakers.map((s,i) => `
-    <div class="spk" style="--sc:${s.color}" data-spk="${s.id}">
+    <div class="spk${s.role ? " tall" : ""}" style="--sc:${s.color}" data-spk="${s.id}"${
+        s.role ? ` title="${esc(s.role)}"` : ""}>
       <span class="key">${i < 9 ? i+1 : "·"}</span>
       <span class="dot"></span>
-      <span class="nm" contenteditable="plaintext-only" spellcheck="false" data-rename="${s.id}">${esc(s.name)}</span>
+      <span class="who2">
+        <span class="nm" contenteditable="plaintext-only" spellcheck="false" data-rename="${s.id}">${esc(s.name)}</span>
+        ${s.role || (s.tag && s.tag !== s.name)
+          ? `<span class="role">${s.tag && s.tag !== s.name ? esc(s.tag) + (s.role ? " · " : "") : ""}${
+              esc(s.role || "")}</span>` : ""}
+      </span>
       <span class="ct">${counts[s.id] || 0}</span>
       <button class="x" data-del="${s.id}" title="Remove speaker">✕</button>
     </div>`).join("") ||
@@ -856,7 +1058,10 @@ function renderCmd(){
 
 function renderProgress(){
   let total = 0, done = 0;
-  state.paragraphs.forEach(p => p.sentences.forEach(s => { total++; if(s.speakerId) done++; }));
+  state.paragraphs.forEach(p => {
+    if(!isSpeech(p)) return;
+    p.sentences.forEach(s => { total++; if(s.speakerId) done++; });
+  });
   const pct = total ? Math.round(done/total*100) : 0;
   $("#bar").querySelector("i").style.width = pct + "%";
   $("#pct").textContent = pct + "%";
@@ -870,7 +1075,8 @@ function gotoNextUntagged(){
   const f = flat();
   if(!f.length) return;
   const from = anchor ? f.findIndex(x => x.s.id === anchor) : -1;
-  const hit = f.slice(from+1).find(x => !x.s.speakerId) || f.find(x => !x.s.speakerId);
+  const open = x => isSpeech(x.p) && !x.s.speakerId;
+  const hit = f.slice(from+1).find(open) || f.find(open);
   if(!hit) return toast("Everything is attributed ✓");
   sel = new Set([hit.s.id]); anchor = hit.s.id; editing = null;
   render(); scrollToSel();
@@ -900,22 +1106,46 @@ function scrollToSel(){
 function outputBlocks(){
   const blocks = [];
   state.paragraphs.forEach(p => {
-    runsOf(p).forEach((r,i) => blocks.push({
-      speaker: speakerOf(r.speakerId),
-      time: i === 0 ? p.time : null,
-      text: r.sentences.map(s => s.text).join(" ").replace(/\s+/g," ").trim()
-    }));
+    if(p.kind === "divider"){ blocks.push({ kind:"divider" }); return; }
+    if(p.kind === "table"){ blocks.push({ kind:"table", rows:p.rows || [] }); return; }
+    if(p.kind === "heading"){
+      const text = (p.sentences[0] || {}).text || "";
+      if(text) blocks.push({ kind:"heading", level:p.level || 2, text });
+      return;
+    }
+    runsOf(p).forEach((r,i) => {
+      const text = r.sentences.map(s => s.text).join(" ").replace(/\s+/g," ").trim();
+      if(text) blocks.push({ kind:"speech", speaker:speakerOf(r.speakerId),
+                             time: i === 0 ? p.time : null, text });
+    });
   });
-  return blocks.filter(b => b.text);
+  return blocks;
+}
+
+// The roster table, when we know more about people than their names.
+function rosterTable(){
+  if(!state.speakers.some(s => s.role || (s.tag && s.tag !== s.name))) return null;
+  const h = (state.rosterHead && state.rosterHead.length >= 3)
+    ? state.rosterHead.slice(0,3) : ["Tag","Person","Role"];
+  const L = ["| " + h.join(" | ") + " |", "|---|---|---|"];
+  state.speakers.forEach(s => L.push(
+    "| **" + labelOf(s) + "** | " + (s.name && s.name !== labelOf(s) ? s.name : "—") +
+    " | " + (s.role || "—") + " |"));
+  return L;
 }
 
 function toMarkdown(){
   const L = ["# " + (state.title || "Meeting transcript"), ""];
   if(state.date) L.push("*" + state.date + "*", "");
-  if(state.speakers.length) L.push("**Attendees:** " + state.speakers.map(s => s.name).join(", "), "");
+  const roster = rosterTable();
+  if(roster) L.push(...roster, "");
+  else if(state.speakers.length) L.push("**Attendees:** " + state.speakers.map(s => s.name).join(", "), "");
   L.push("---", "");
   outputBlocks().forEach(b => {
-    L.push("**" + (b.speaker ? b.speaker.name : "Unattributed") +
+    if(b.kind === "heading"){ L.push("#".repeat(Math.min(6, Math.max(2, b.level))) + " " + b.text, ""); return; }
+    if(b.kind === "divider"){ L.push("---", ""); return; }
+    if(b.kind === "table"){ L.push(...b.rows, ""); return; }
+    L.push("**" + (b.speaker ? labelOf(b.speaker) : "Unattributed") +
            (b.time ? " (" + b.time + ")" : "") + ":** " + b.text, "");
   });
   return L.join("\n").replace(/\n{3,}/g,"\n\n").trim() + "\n";
@@ -923,22 +1153,35 @@ function toMarkdown(){
 
 function toHTML(){
   const blocks = outputBlocks();
-  const used = state.speakers.filter(s => blocks.some(b => b.speaker && b.speaker.id === s.id));
-  const orphans = blocks.some(b => !b.speaker);
+  const speech = blocks.filter(b => b.kind === "speech");
+  const used = state.speakers.filter(s => speech.some(b => b.speaker && b.speaker.id === s.id));
+  const orphans = speech.some(b => !b.speaker);
   const title = state.title || "Meeting transcript";
 
   const legend = used.map(s =>
-    `<button class="lg on" data-f="${esc(s.id)}" style="--sc:${s.color}"><i></i>${esc(s.name)}</button>`
+    `<button class="lg on" data-f="${esc(s.id)}" style="--sc:${s.color}"${
+      s.role ? ` title="${esc(s.role)}"` : ""}><i></i>${esc(s.name)}</button>`
   ).join("") + (orphans ? `<button class="lg on" data-f="none" style="--sc:#8A8A94"><i></i>Unattributed</button>` : "");
 
-  const body = blocks.map(b => `
+  const roster = used.some(s => s.role)
+    ? `<ul class="who-list">${used.map(s => `<li><span class="d" style="--sc:${s.color}"></span>` +
+        `<b>${esc(s.name)}</b>${s.role ? `<span>${esc(s.role)}</span>` : ""}</li>`).join("")}</ul>`
+    : "";
+
+  const body = blocks.map(b => {
+    if(b.kind === "heading") return `\n  <h${Math.min(6, Math.max(2, b.level))} class="sec">${esc(b.text)}</h${Math.min(6, Math.max(2, b.level))}>`;
+    if(b.kind === "divider") return `\n  <hr class="sep">`;
+    if(b.kind === "table") return "\n  " + renderTable(b.rows);
+    return `
   <article class="b${b.speaker ? "" : " none"}" data-w="${b.speaker ? esc(b.speaker.id) : "none"}"${
       b.speaker ? ` style="--sc:${b.speaker.color}"` : ""}>
-    <div class="h">${b.speaker ? `<span class="d"></span><span class="n">${esc(b.speaker.name)}</span>`
-                                : `<span class="n">unattributed</span>`}${
+    <div class="h">${b.speaker ? `<span class="d"></span><span class="n">${esc(b.speaker.name)}</span>${
+        b.speaker.role ? `<span class="r">${esc(b.speaker.role)}</span>` : ""}`
+      : `<span class="n">unattributed</span>`}${
       b.time ? `<span class="t">${esc(b.time)}</span>` : ""}</div>
     <p>${esc(b.text)}</p>
-  </article>`).join("");
+  </article>`;
+  }).join("");
 
   const css = `
 :root{--bg:#0B0B0D;--surface:#121216;--surface-2:#191920;--line:#26262F;--fg:#ECECF1;--fg-mid:#9A9AA8;--fg-dim:#5A5A69;--accent:#CCFF33;color-scheme:dark}
@@ -965,6 +1208,16 @@ hr{border:none;border-top:1px solid var(--line);margin:24px 0 6px}
 .h .n{font-size:12.5px;font-weight:600;letter-spacing:-.01em;color:color-mix(in srgb,var(--sc) 72%,var(--fg))}
 .b.none .h .n{color:var(--fg-dim);font-weight:400}
 .h .t{font:10.5px/1 ui-monospace,"SF Mono",Menlo,monospace;color:var(--fg-dim)}
+.h .r{font-size:11.5px;color:var(--fg-dim)}
+.sec{font-size:17px;font-weight:600;letter-spacing:-.02em;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+hr.sep{border:none;border-top:1px solid var(--line);margin:26px 0}
+.who-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.who-list li{display:flex;align-items:baseline;gap:8px}
+.who-list .d{width:7px;height:7px;border-radius:2px;background:var(--sc);flex:none;align-self:center}
+.who-list span{color:var(--fg-dim)}
+.mdtable{border-collapse:collapse;margin:6px 0 18px;font-size:13.5px;width:100%}
+.mdtable th,.mdtable td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+.mdtable th{font-weight:600;background:var(--surface-2)}
 .b p{margin:0}
 .b.none p{color:var(--fg-mid)}
 mark{background:var(--accent);color:#0B0B0D;border-radius:3px;padding:0 1px}
@@ -1011,9 +1264,10 @@ mark{background:var(--accent);color:#0B0B0D;border-radius:3px;padding:0 1px}
       .filter(Boolean).join(" &nbsp;·&nbsp; ")}</div>
   <div class="tools"><input id="q" placeholder="Search the transcript…" autocomplete="off"></div>
   <div class="legend">${legend}</div>
+  ${roster}
   <hr>
   ${body}
-  <div class="foot">${blocks.length} passages · tagged with Whodat</div>
+  <div class="foot">${speech.length} passages · tagged with Whodat</div>
 </div>
 <script>${js}<\/script>
 </body></html>`;
@@ -1044,7 +1298,7 @@ let saveTimer = null;
 function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => store.set(KEY, JSON.stringify({
-    at: Date.now(), title:state.title, date:state.date,
+    at: Date.now(), title:state.title, date:state.date, rosterHead:state.rosterHead,
     speakers:state.speakers, paragraphs:state.paragraphs
   })), 400);
 }
@@ -1056,13 +1310,16 @@ function loadSaved(){
 function adoptProject(o){
   state.title = o.title || "";
   state.date  = o.date || "";
+  state.rosterHead = o.rosterHead || undefined;
   state.speakers = (o.speakers || []).map((s,i) => ({
-    id: s.id || nid(), name: s.name || ("Speaker " + (i+1)), color: s.color || INKS[i % INKS.length] }));
+    id: s.id || nid(), name: s.name || ("Speaker " + (i+1)), color: s.color || INKS[i % INKS.length],
+    tag: s.tag || undefined, role: s.role || undefined }));
   state.paragraphs = (o.paragraphs || []).map(p => ({
-    id: p.id || nid(), time: p.time || null,
+    id: p.id || nid(), kind: p.kind || "speech", time: p.time || null,
+    level: p.level || undefined, rows: p.rows || undefined,
     sentences: (p.sentences || []).map(s => ({
       id: s.id || nid(), text: s.text || "", speakerId: s.speakerId || null })).filter(s => s.text)
-  })).filter(p => p.sentences.length);
+  })).filter(p => p.sentences.length || p.kind === "divider" || p.kind === "table");
   uid = Math.max(uid, 1000 + state.paragraphs.length * 4 + state.speakers.length);
   past = []; future = []; sel = new Set(); anchor = null; editing = null;
 }
@@ -1109,10 +1366,12 @@ $("#start").onclick = () => {
             speakers: [], paragraphs: [] };
   $("#attendees").value.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).forEach(addSpeaker);
   const parsed = parseTranscript(raw, {
-    prefix: $("#optPrefix").checked, addNames: $("#optAdd").checked, time: $("#optTime").checked });
+    prefix: $("#optPrefix").checked, addNames: $("#optAdd").checked,
+    time: $("#optTime").checked, markdown: $("#optMd").checked });
   state.paragraphs = parsed.paragraphs;
   if(!state.title && parsed.title) state.title = parsed.title;   // markdown heading
   if(parsed.date) state.date = parsed.date;                      // markdown date line
+  if(parsed.rosterHead) state.rosterHead = parsed.rosterHead;    // the roster's own headers
   if(!state.paragraphs.length){ $("#setupErr").textContent = "Couldn't find any text in there."; return; }
   past = []; future = []; sel = new Set(); anchor = null;
   enterApp(); save();
@@ -1154,7 +1413,14 @@ $("#transcript").addEventListener("mousedown", e => {
   // closest() lookups further along the bubble path can't be trusted.
   const sent = e.target.closest(".sent");
   const pbtn = e.target.closest(".pbtn");
-  if(sent || pbtn || e.target.closest(".sedit") || e.target.closest(".edittools")) e._whodat = true;
+  const dropb = e.target.closest("[data-drop]");
+  if(sent || pbtn || dropb || e.target.closest(".sedit") || e.target.closest(".edittools")) e._whodat = true;
+  if(dropb){
+    e.preventDefault();
+    commit();
+    state.paragraphs = state.paragraphs.filter(p => p.id !== dropb.dataset.drop);
+    render(); save(); return;
+  }
   if(pbtn){
     const p = state.paragraphs.find(x => x.id === pbtn.dataset.para);
     if(p){ sel = new Set(p.sentences.map(s => s.id)); anchor = p.sentences[0].id; editing = null; render(); }
@@ -1247,7 +1513,8 @@ $("#btnMd").onclick   = () => { download(slug() + ".md", toMarkdown(), "text/mar
 $("#btnHtml").onclick = () => { download(slug() + ".html", toHTML(), "text/html"); toast("HTML page exported"); };
 $("#btnSave").onclick = () => {
   download(slug() + ".whodat.json", JSON.stringify({ app:"whodat", version:1,
-    title:state.title, date:state.date, speakers:state.speakers, paragraphs:state.paragraphs }, null, 2),
+    title:state.title, date:state.date, rosterHead:state.rosterHead,
+    speakers:state.speakers, paragraphs:state.paragraphs }, null, 2),
     "application/json");
   toast("Project saved");
 };
@@ -1334,7 +1601,7 @@ document.addEventListener("keydown", e => {
 window.addEventListener("beforeunload", e => {
   if(!$("#app").classList.contains("on") || !state.paragraphs.length) return;
   const f = flat();
-  if(f.some(x => !x.s.speakerId)){ e.preventDefault(); e.returnValue = ""; }
+  if(f.some(x => isSpeech(x.p) && !x.s.speakerId)){ e.preventDefault(); e.returnValue = ""; }
 });
 </script>
 </body>

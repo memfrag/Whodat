@@ -25,10 +25,24 @@ transcript into paragraphs and sentences, and then you attribute them.
   sentence splitter knows about `Dr.`, `e.g.`, initials and decimals.
 - **Already-tagged files come back tagged.** A line starting with `Martin:`, `**Martin:**`,
   `**Martin**:`, `*Martin:*` or `**Martin (00:04:12):**` arrives pre-attributed — and stays fully
-  editable, so you can re-tag, edit or delete any of it. Because that is the exact shape of
-  Whodat's own markdown export, **an exported `.md` imports straight back**: title, date,
-  attendees, timestamps and every attribution survive the trip, and re-exporting produces a
-  byte-identical file.
+  editable, so you can re-tag, edit or delete any of it.
+- **Markdown structure is kept as structure.** Headings and `---` dividers become blocks of their
+  own instead of text you have to tag: they're never counted in progress, never land on a speaker,
+  and are written back out on export. Headings stay editable, dividers removable.
+- **A participants table maps tags to people.** Put one at the top and the short tag used in the
+  transcript is resolved to a real name and role:
+
+  | Tag | Person | Role |
+  |---|---|---|
+  | **Oscar** | Oscar Edholm | CDO, Elite Hotels |
+  | **Framna** | — | Framna-person, unclear who |
+
+  Column roles are read from the header (`Tag`/`Tagg`, `Person`/`Namn`, `Role`/`Roll`) or from
+  their order, and a dash means "not known" — so a catch-all tag like `Framna` works as its own
+  participant. Roles show up in the sidebar and in the exported HTML.
+- **Round trips exactly.** All of the above is what Whodat's own markdown export writes, so an
+  exported `.md` imports straight back — title, date, roster, structure, timestamps and every
+  attribution survive, and re-exporting produces a byte-identical file.
 - **Nothing is lost.** Work is autosaved to the browser, and `Save .json` produces a project file
   you can reopen later or move to another machine.
 
@@ -60,8 +74,9 @@ transcript into paragraphs and sentences, and then you attribute them.
 Open `index.html` in a browser. That's the whole story — clone the repo, double-click the file,
 or serve the folder with anything you like.
 
-`sample-transcript.txt` is a short fake meeting for trying it out, and `sample-transcript.md`
-is the same idea already tagged with `**Name:**` prefixes.
+`sample-transcript.txt` is a short fake meeting for trying it out. `sample-transcript.md` is the
+same meeting already tagged, with a participants table, headings and dividers — drop it in to see
+everything come back attributed.
 
 ## License
 
