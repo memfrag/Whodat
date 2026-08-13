@@ -18,17 +18,18 @@ transcript into paragraphs and sentences, and then you attribute them.
 - **Untagged text stays dimmed** and snaps to full contrast once attributed, so the remaining
   work is always visible at a glance. `Tab` jumps to the next unattributed sentence.
 - **Fix the text while you tag.** Edit any sentence in place, split one at the cursor, join
-  several into one, break a paragraph in two, or delete text outright. Everything is undoable
-  with `⌘Z`.
+  several into one, break a paragraph in two, merge paragraphs back together, or delete text
+  outright. Everything is undoable with `⌘Z`.
 - **Smart-ish parsing.** Speaker prefixes are matched against the attendee list and pre-assigned,
   leading timestamps are pulled into the margin, and WebVTT/SRT scaffolding is stripped. The
   sentence splitter knows about `Dr.`, `e.g.`, initials and decimals.
 - **Already-tagged files come back tagged.** A line starting with `Martin:`, `**Martin:**`,
   `**Martin**:`, `*Martin:*` or `**Martin (00:04:12):**` arrives pre-attributed — and stays fully
   editable, so you can re-tag, edit or delete any of it.
-- **Markdown structure is kept as structure.** Headings and `---` dividers become blocks of their
-  own instead of text you have to tag: they're never counted in progress, never land on a speaker,
-  and are written back out on export. Headings stay editable, dividers removable.
+- **Markdown structure is kept as structure.** Headings, tables and `---` dividers are shown as
+  what they are, not as text to tag. They can't be selected or attributed at all, they don't count
+  towards progress, `Tab` and the arrow keys pass straight over them, and they're written back out
+  on export. Each has its own hover controls instead — ✎ to edit a heading, ✕ to remove the block.
 - **A participants table maps tags to people.** Put one at the top and the short tag used in the
   transcript is resolved to a real name and role:
 
@@ -67,6 +68,7 @@ transcript into paragraphs and sentences, and then you attribute them.
 | `A` | Select the whole paragraph |
 | `E` | Edit the selected sentence (`⌘↩` save, `esc` cancel) |
 | `J` / `S` | Join selected sentences / break the paragraph here |
+| `M` | Merge paragraphs — the selected ones fold together, or into the one above |
 | `⌫` | Delete the selection |
 | `Tab` | Next unattributed sentence |
 | `↑` `↓` | Move the selection (`⇧` to extend) |

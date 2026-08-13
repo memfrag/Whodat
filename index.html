@@ -129,8 +129,10 @@ button{cursor:pointer;background:none;border:none;padding:0;letter-spacing:inher
 .err{color:var(--danger);font-size:12.5px}
 
 /* ── app shell ────────────────────────────────────────────── */
-#app{display:none;height:100%;grid-template-rows:auto 1fr}
-#app.on{display:grid}
+/* The shell owns the viewport height, so the sidebar and the transcript scroll
+   independently instead of the whole page moving as one. */
+#app{display:none;grid-template-rows:auto 1fr}
+#app.on{display:grid;height:100vh;height:100dvh;overflow:hidden}
 .topbar{
   display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--bg);
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;flex-wrap:wrap;
@@ -156,7 +158,7 @@ button{cursor:pointer;background:none;border:none;padding:0;letter-spacing:inher
 @media(max-width:900px){.main{grid-template-columns:1fr}.side{display:none}}
 
 /* ── sidebar ──────────────────────────────────────────────── */
-.side{border-right:1px solid var(--line);overflow-y:auto;padding:20px 14px 140px;background:var(--bg)}
+.side{border-right:1px solid var(--line);overflow-y:auto;min-height:0;padding:20px 14px 60px;background:var(--bg)}
 .side h3{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--fg-dim);margin:0 0 12px;font-weight:400}
 .side section + section{margin-top:26px;padding-top:22px;border-top:1px solid var(--line-soft)}
@@ -224,9 +226,15 @@ kbd{
 .para.heading h2{font-size:22px;font-weight:600}
 .para.heading h3{font-size:18px;font-weight:600}
 .para.heading h4,.para.heading h5,.para.heading h6{font-size:15.5px;font-weight:600}
-.hsent{color:var(--fg);border-bottom:none}
 .para.heading .hd::after{content:"";display:block;height:1px;background:var(--line);margin-top:8px}
 hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0}
+.stools{position:absolute;right:0;top:2px;display:flex;gap:4px;opacity:0;transition:opacity .13s ease;
+  background:var(--bg);padding-left:6px;z-index:2}
+.para.struct:hover .stools{opacity:1}
+.sbtn{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;font-size:11px;
+  color:var(--fg-dim);border:1px solid var(--line);background:var(--surface);transition:color .12s,border-color .12s}
+.sbtn:hover{color:var(--fg);border-color:var(--fg-dim)}
+.sbtn[data-drop]:hover{color:var(--danger);border-color:var(--danger)}
 .mdtable{border-collapse:collapse;font-size:13.5px;width:100%;margin:2px 0}
 .mdtable th,.mdtable td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
 .mdtable th{font-weight:600;background:var(--surface-2);color:var(--fg-mid)}
@@ -419,6 +427,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0}
           <div><span>Edit text</span><kbd>E</kbd></div>
           <div><span>Join sentences</span><kbd>J</kbd></div>
           <div><span>Break paragraph</span><kbd>S</kbd></div>
+          <div><span>Merge paragraphs</span><kbd>M</kbd></div>
           <div><span>Delete</span><kbd>⌫</kbd></div>
           <div><span>Next untagged</span><kbd>Tab</kbd></div>
           <div><span>Undo</span><kbd>⌘Z</kbd></div>
@@ -454,6 +463,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0}
   <button class="btn sm" data-act="edit">Edit</button>
   <button class="btn sm" data-act="join">Join</button>
   <button class="btn sm" data-act="split">Break ¶</button>
+  <button class="btn sm" data-act="merge">Merge ¶</button>
   <button class="btn sm" data-act="del" style="color:var(--danger)">Delete</button>
 </div>
 
@@ -550,7 +560,8 @@ function tablePeople(rows){
   const find = re => head.findIndex(h => re.test(h));
   const t = find(/^(tag|tagg|label|etikett|kod)$/), n = find(/^(person|name|namn|deltagare|who)$/),
         r = find(/^(role|roll|title|titel|funktion)$/);
-  if(t >= 0 || n >= 0 || r >= 0){
+  const named = t >= 0 || n >= 0 || r >= 0;
+  if(named){
     iTag = t; iName = n; iRole = r;
     if(iTag < 0 && iName >= 0) iTag = iName;   // a table of names only
   }
@@ -563,6 +574,9 @@ function tablePeople(rows){
     if(!tag && !name) continue;
     out.push({ tag, name, role });
   }
+  // Without named columns, only believe it's a roster if the labels read as names —
+  // otherwise a data table at the top of a document would become a cast of speakers.
+  if(!named && !out.every(p => looksLikeName(p.tag || p.name || ""))) return [];
   return out;
 }
 
@@ -694,13 +708,11 @@ function parseTranscript(raw, opts){
     return r ? upsertSpeaker(r.tag, r.name, r.role, true) : addSpeaker(label);
   };
 
-  const chunks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split(/\n+/);
+  // Structure is found across the whole text first, so a table or heading is
+  // recognised whether or not the document separates paragraphs with blank lines.
+  const byBlank = /\n[ \t]*\n/.test(text);
+  const units = opts.markdown ? expandUnits(text) : [{ type:"text", text }];
   const paras = [];
-  const units = [];
-  chunks.forEach(chunk => {
-    if(opts.markdown) units.push(...expandUnits(chunk));
-    else if(chunk.trim()) units.push({ type:"text", text:chunk });
-  });
 
   for(const unit of units){
     if(unit.type === "heading"){
@@ -714,8 +726,14 @@ function parseTranscript(raw, opts){
                    rows: unit.rows.map(r => r.trim()) });
       continue;
     }
-    let body = unit.text.replace(/\n+/g," ").trim();
-    if(!body) continue;
+    const chunks = byBlank ? unit.text.split(/\n[ \t]*\n+/) : unit.text.split(/\n+/);
+    for(const chunk of chunks) parseSpeech(chunk);
+    continue;
+  }
+
+  function parseSpeech(chunk){
+    let body = chunk.replace(/\n+/g," ").trim();
+    if(!body) return;
     let time = null, spk = null;
     if(opts.time){
       const m = body.match(TIME_RE);
@@ -752,7 +770,7 @@ function parseTranscript(raw, opts){
       }
     }
     body = body.trim();
-    if(!body) continue;
+    if(!body) return;
     paras.push({ id:nid(), kind:"speech", time,
       sentences: splitSentences(body).map(t => ({ id:nid(), text:t, speakerId: spk ? spk.id : null })) });
   }
@@ -834,10 +852,12 @@ function flat(){
   return out;
 }
 const selectedFlat = () => flat().filter(x => sel.has(x.s.id));
+// Only speech is selectable — structure can't be reached by click or by keyboard.
+const flatSpeech = () => flat().filter(x => isSpeech(x.p));
 
 function pick(id, mode){
   if(mode === "range" && anchor != null){
-    const f = flat();
+    const f = flatSpeech();
     const a = f.findIndex(x => x.s.id === anchor);
     const b = f.findIndex(x => x.s.id === id);
     if(a >= 0 && b >= 0) sel = new Set(f.slice(Math.min(a,b), Math.max(a,b)+1).map(x => x.s.id));
@@ -865,7 +885,7 @@ function assign(speakerId){
   render(); save();
 }
 function nextAfterSelection(){
-  const f = flat();
+  const f = flatSpeech();
   const ids = f.map(x => x.s.id).filter(id => sel.has(id));
   const last = ids[ids.length-1];
   if(!last) return null;
@@ -900,6 +920,39 @@ function joinSelected(){
   sel = new Set([keep.id]); anchor = keep.id;
   render(); save();
 }
+/* Merge paragraphs — the inverse of breaking one. With a selection spanning
+   several paragraphs they all fold into the first; with a selection inside one
+   paragraph it folds into the paragraph above it. Structure blocks are never
+   swallowed, and never merged across. */
+function mergeParagraphs(){
+  const chosen = selectedFlat();
+  if(!chosen.length) return toast("Select something to merge first");
+  if(!chosen.every(c => isSpeech(c.p))) return toast("That's a heading, not speech");
+
+  const picked = [];
+  chosen.forEach(c => { if(!picked.includes(c.p)) picked.push(c.p); });
+  let targets = picked;
+  if(picked.length === 1){
+    const i = state.paragraphs.indexOf(picked[0]);
+    const prev = state.paragraphs[i-1];
+    if(!prev) return toast("Nothing above to merge into");
+    if(!isSpeech(prev)) return toast("There's a " + (prev.kind === "table" ? "table" : prev.kind) + " in between");
+    targets = [prev, picked[0]];
+  }
+  const first = state.paragraphs.indexOf(targets[0]);
+  const last  = state.paragraphs.indexOf(targets[targets.length-1]);
+  const span  = state.paragraphs.slice(first, last+1);
+  if(!span.every(isSpeech)) return toast("There's a heading or table in between");
+
+  commit();
+  const keep = span[0];
+  span.slice(1).forEach(p => keep.sentences.push(...p.sentences));
+  state.paragraphs.splice(first+1, span.length-1);
+  sel = new Set(keep.sentences.map(s => s.id));
+  anchor = keep.sentences[0].id;
+  render(); save();
+}
+
 function breakParagraph(){
   const chosen = selectedFlat();
   if(chosen.length !== 1) return toast("Select one sentence to break the paragraph there");
@@ -978,14 +1031,16 @@ function render(){
 
   let html = "";
   state.paragraphs.forEach(p => {
+    // Structure is shown as structure: it carries no speaker, cannot be selected
+    // and so cannot be tagged. Each block gets its own controls instead.
     if(p.kind === "divider"){
       html += `<div class="para struct" data-p="${p.id}"><hr class="divider">`
-           +  `<button class="dropbtn" data-drop="${p.id}" title="Remove this divider">✕</button></div>`;
+           +  `<span class="stools"><button class="sbtn" data-drop="${p.id}" title="Remove this divider">✕</button></span></div>`;
       return;
     }
     if(p.kind === "table"){
       html += `<div class="para struct" data-p="${p.id}">`
-           +  `<button class="dropbtn" data-drop="${p.id}" title="Remove this table">✕</button>`
+           +  `<span class="stools"><button class="sbtn" data-drop="${p.id}" title="Remove this table">✕</button></span>`
            +  renderTable(p.rows) + `</div>`;
       return;
     }
@@ -1000,8 +1055,10 @@ function render(){
              +    `<button class="btn sm ghost" data-act="ecancel">Cancel</button>`
              +    `<span class="note">⌘↩ save · esc cancel</span></span>`;
       } else {
-        html += `<h${lvl} class="hd"><span class="sent hsent${sel.has(s.id) ? " sel" : ""}" `
-             +  `data-s="${s.id}">${esc(s.text)}</span></h${lvl}>`;
+        html += `<span class="stools">`
+             +    `<button class="sbtn" data-edith="${s.id}" title="Edit this heading">✎</button>`
+             +    `<button class="sbtn" data-drop="${p.id}" title="Remove this heading">✕</button></span>`
+             +  `<h${lvl} class="hd">${esc(s.text)}</h${lvl}>`;
       }
       html += `</div>`;
       return;
@@ -1100,7 +1157,7 @@ function autosize(ta){ ta.style.height = "auto"; ta.style.height = (ta.scrollHei
 
 /* ── navigation ───────────────────────────────────────────── */
 function gotoNextUntagged(){
-  const f = flat();
+  const f = flatSpeech();
   if(!f.length) return;
   const from = anchor ? f.findIndex(x => x.s.id === anchor) : -1;
   const open = x => isSpeech(x.p) && !x.s.speakerId;
@@ -1110,7 +1167,7 @@ function gotoNextUntagged(){
   render(); scrollToSel();
 }
 function move(delta, extend){
-  const f = flat();
+  const f = flatSpeech();
   if(!f.length) return;
   const i = anchor ? f.findIndex(x => x.s.id === anchor) : -1;
   const j = i < 0 ? 0 : Math.max(0, Math.min(f.length-1, i + delta));
@@ -1498,12 +1555,19 @@ $("#transcript").addEventListener("mousedown", e => {
   const sent = e.target.closest(".sent");
   const pbtn = e.target.closest(".pbtn");
   const dropb = e.target.closest("[data-drop]");
-  if(sent || pbtn || dropb || e.target.closest(".sedit") || e.target.closest(".edittools")) e._whodat = true;
+  const edith = e.target.closest("[data-edith]");
+  if(sent || pbtn || dropb || edith || e.target.closest(".sedit") || e.target.closest(".edittools"))
+    e._whodat = true;
   if(dropb){
     e.preventDefault();
     commit();
     state.paragraphs = state.paragraphs.filter(p => p.id !== dropb.dataset.drop);
     render(); save(); return;
+  }
+  if(edith){                                   // headings are edited, never tagged
+    e.preventDefault();
+    sel.clear(); anchor = null; editing = edith.dataset.edith;
+    render(); return;
   }
   if(pbtn){
     const p = state.paragraphs.find(x => x.id === pbtn.dataset.para);
@@ -1516,6 +1580,12 @@ $("#transcript").addEventListener("mousedown", e => {
   }
 });
 $("#transcript").addEventListener("dblclick", e => {
+  const head = e.target.closest(".para.heading");
+  if(head){
+    const p = state.paragraphs.find(x => x.id === head.dataset.p);
+    if(p && p.sentences[0]){ sel.clear(); anchor = null; editing = p.sentences[0].id; render(); }
+    return;
+  }
   const sent = e.target.closest(".sent");
   if(sent){ sel = new Set([sent.dataset.s]); anchor = sent.dataset.s; editing = sent.dataset.s; render(); }
 });
@@ -1551,6 +1621,7 @@ $("#cmd").addEventListener("click", e => {
                     editing = f[0].s.id; render(); },
      join:  joinSelected,
      split: breakParagraph,
+     merge: mergeParagraphs,
      del:   deleteSelected })[b.dataset.act]();
 });
 
@@ -1629,6 +1700,7 @@ function showHelp(){
       <div><span>Split a sentence</span><span><kbd>Split at cursor</kbd> while editing</span></div>
       <div><span>Join selected sentences</span><kbd>J</kbd></div>
       <div><span>Break the paragraph here</span><kbd>S</kbd></div>
+      <div><span>Merge with the paragraph above</span><kbd>M</kbd></div>
       <div><span>Delete the selection</span><kbd>⌫</kbd></div>
       <div><span>Move / extend</span><span><kbd>↑ ↓</kbd> <kbd>⇧ ↑ ↓</kbd></span></div>
       <div><span>Next unattributed</span><kbd>Tab</kbd></div>
@@ -1680,12 +1752,12 @@ document.addEventListener("keydown", e => {
   if(k === "a"){ e.preventDefault(); selectParagraphOf(anchor || Array.from(sel)[0]); return; }
   if(k === "j"){ e.preventDefault(); joinSelected(); return; }
   if(k === "s"){ e.preventDefault(); breakParagraph(); return; }
+  if(k === "m"){ e.preventDefault(); mergeParagraphs(); return; }
 });
 
 window.addEventListener("beforeunload", e => {
   if(!$("#app").classList.contains("on") || !state.paragraphs.length) return;
-  const f = flat();
-  if(f.some(x => isSpeech(x.p) && !x.s.speakerId)){ e.preventDefault(); e.returnValue = ""; }
+  if(flatSpeech().some(x => !x.s.speakerId)){ e.preventDefault(); e.returnValue = ""; }
 });
 </script>
 </body>
