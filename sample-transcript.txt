@@ -1,0 +1,19 @@
+[00:00:12] Alice Chen: Alright, let's get going. Thanks for making the time on short notice. I want to keep this to thirty minutes if we can.
+
+Sure. I pulled the numbers this morning, so they're fresh. The short version is that ingest is holding up fine but the export path is where everything falls over. We saw three timeouts on Tuesday alone.
+
+[00:01:40] Bob Ramirez: Three is worse than I thought. Were they all the same customer? Because if it's the same tenant every time, that changes what we do about it.
+
+Two of the three were. The third one was a smaller account that happened to run a full re-export at the same time. Dr. Patel flagged it in the incident channel before our alerting caught it, which is its own problem.
+
+Priya Nair: I'd rather fix the alerting first, honestly. If we're finding out from customers, everything else is guesswork. Give me two days and I'll have proper thresholds on the export queue.
+
+[00:03:05] Alice Chen: Two days is fine. Bob, can you take the timeout itself? I don't want us to only fix the visibility and call it done.
+
+I can, but I want to be clear about scope. Making the export streaming rather than buffered is a week of work, minimum. If you want something by Friday it'll be a bigger timeout and a retry, which is a bandage.
+
+Take the bandage now and put the streaming work in next sprint. I'd rather ship something on Friday than have another three timeouts next week. Any objections?
+
+Priya Nair: None from me. I'll note it as tech debt so it doesn't quietly disappear.
+
+[00:05:22] Alice Chen: Good. Last thing — the customer who hit it twice is up for renewal in March. Someone should tell their account manager before they hear it from the customer. I'll do that one myself. Anything else? No? Then we're done, thanks everyone.

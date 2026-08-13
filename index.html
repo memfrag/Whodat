@@ -1,0 +1,1272 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whodat — tag a transcript with who said what</title>
+<meta name="description" content="Tag a meeting transcript down to the sentence, then export self-contained HTML or tagged markdown. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230B0B0D'/><rect x='20' y='30' width='42' height='7' rx='3.5' fill='%23CCFF33'/><rect x='20' y='47' width='60' height='7' rx='3.5' fill='%235B9CFF'/><rect x='20' y='64' width='30' height='7' rx='3.5' fill='%23FF6B81'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ──────────────────────────────────────────────────────────────
+   WHODAT — precision instrument for attributing transcripts.
+   Graphite + signal-lime. Hairlines, tight type, no ornament.
+   Untagged text sits dimmed; attributing it snaps it into focus.
+   ────────────────────────────────────────────────────────────── */
+
+:root[data-theme="dark"]{
+  --bg:#0B0B0D; --surface:#121216; --surface-2:#191920; --surface-3:#212129;
+  --line:#26262F; --line-soft:#1C1C23;
+  --fg:#ECECF1; --fg-mid:#9A9AA8; --fg-dim:#5A5A69;
+  --accent:#CCFF33; --accent-2:#B4E62B; --on-accent:#0B0B0D;
+  --sel-bg:rgba(204,255,51,.14); --sel-line:rgba(204,255,51,.55);
+  --danger:#FF6B81;
+  --shadow:0 1px 1px rgba(0,0,0,.5), 0 18px 50px -18px rgba(0,0,0,.9);
+  --mix:#0B0B0D;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#FFFFFF; --surface:#FAFAFA; --surface-2:#F3F3F6; --surface-3:#EAEAEF;
+  --line:#E3E3EA; --line-soft:#EEEEF2;
+  --fg:#0C0C10; --fg-mid:#61616E; --fg-dim:#A2A2B0;
+  --accent:#5B8C00; --accent-2:#4C7600; --on-accent:#FFFFFF;
+  --sel-bg:rgba(132,204,22,.16); --sel-line:rgba(101,163,13,.6);
+  --danger:#E11D48;
+  --shadow:0 1px 1px rgba(16,16,24,.04), 0 16px 40px -16px rgba(16,16,24,.24);
+  --mix:#0C0C10;
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:"Instrument Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  font-size:16px;line-height:1.6;letter-spacing:-.005em;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none;padding:0;letter-spacing:inherit}
+::selection{background:var(--sel-bg)}
+.mono,.eyebrow{font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace}
+.eyebrow{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-dim)}
+
+/* ── buttons ──────────────────────────────────────────────── */
+.btn{
+  font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:11px;letter-spacing:.02em;padding:7px 12px;border-radius:7px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--fg-mid);
+  transition:background .14s ease,color .14s ease,border-color .14s ease,transform .08s ease;
+  white-space:nowrap;
+}
+.btn:hover{color:var(--fg);background:var(--surface-3);border-color:var(--fg-dim)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:500}
+.btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2);color:var(--on-accent)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 9px;font-size:10.5px;border-radius:6px}
+.btn[disabled]{opacity:.35;pointer-events:none}
+
+/* ── setup ────────────────────────────────────────────────── */
+.stage{position:relative;min-height:100%}
+#setup{max-width:1120px;margin:0 auto;padding:min(10vh,90px) 28px 100px}
+.brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand h1{
+  font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;font-weight:800;
+  font-size:clamp(44px,8.4vw,86px);margin:0;letter-spacing:-.045em;line-height:.92;
+}
+.brand h1 em{font-style:normal;color:var(--accent)}
+.brand .pill{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--fg-mid);border:1px solid var(--line);
+  padding:5px 10px;border-radius:99px;background:var(--surface);
+}
+.lede{max-width:52ch;margin:24px 0 0;font-size:18px;color:var(--fg-mid);line-height:1.55}
+.lede b{color:var(--fg);font-weight:500}
+.rule{height:1px;background:var(--line);margin:40px 0 36px;position:relative}
+.rule::after{content:"";position:absolute;left:0;top:0;width:56px;height:1px;background:var(--accent)}
+
+.cols{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(320px,1.2fr);gap:38px}
+@media(max-width:840px){.cols{grid-template-columns:1fr;gap:8px}}
+.field{margin-bottom:26px}
+.field > label{display:block;margin-bottom:9px}
+.hint{font-size:12.5px;color:var(--fg-dim);margin:8px 0 0;line-height:1.5}
+.inp,.ta{
+  width:100%;background:var(--surface);border:1px solid var(--line);border-radius:9px;
+  padding:11px 13px;font-size:15px;outline:none;color:var(--fg);
+  transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+}
+.inp::placeholder,.ta::placeholder{color:var(--fg-dim)}
+.inp:focus,.ta:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--sel-bg)}
+.ta{resize:vertical;line-height:1.6}
+#attendees{min-height:148px}
+#rawtext{min-height:272px;font-size:14.5px;font-family:"JetBrains Mono",ui-monospace,monospace;letter-spacing:-.01em}
+
+.drop{
+  border:1px dashed var(--line);border-radius:9px;background:var(--surface);
+  padding:14px 16px;display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap;
+  transition:border-color .15s ease,background .15s ease;
+}
+.drop.over{border-color:var(--accent);background:var(--sel-bg)}
+.drop .txt{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11.5px;color:var(--fg-dim)}
+.opts{display:flex;flex-direction:column;gap:11px}
+.opt{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--fg-mid);cursor:pointer;line-height:1.45}
+.opt input{margin:4px 0 0;accent-color:var(--accent)}
+.opt code{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--fg)}
+.go{display:flex;gap:11px;align-items:center;margin-top:28px;flex-wrap:wrap}
+.resume{
+  margin-top:24px;border:1px solid var(--line);border-left:2px solid var(--accent);
+  background:var(--surface);padding:13px 16px;display:flex;gap:14px;align-items:center;
+  justify-content:space-between;flex-wrap:wrap;border-radius:9px;
+}
+.resume .t{font-size:13px;color:var(--fg-mid)}
+.err{color:var(--danger);font-size:12.5px}
+
+/* ── app shell ────────────────────────────────────────────── */
+#app{display:none;height:100%;grid-template-rows:auto 1fr}
+#app.on{display:grid}
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--bg);
+  border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;flex-wrap:wrap;
+}
+.topbar .mark{
+  font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;font-weight:800;
+  font-size:18px;letter-spacing:-.04em;line-height:1;
+}
+.topbar .mark em{font-style:normal;color:var(--accent)}
+.topbar .doc{
+  font-size:13px;color:var(--fg-mid);padding-left:14px;border-left:1px solid var(--line);
+  max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.spacer{flex:1}
+.meter{display:flex;align-items:center;gap:9px}
+.bar{width:120px;height:5px;background:var(--surface-3);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0%;background:var(--accent);border-radius:99px;
+  transition:width .4s cubic-bezier(.3,0,.2,1)}
+.pct{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;color:var(--fg-mid);min-width:4ch}
+.vr{width:1px;height:20px;background:var(--line)}
+
+.main{display:grid;grid-template-columns:250px 1fr;min-height:0}
+@media(max-width:900px){.main{grid-template-columns:1fr}.side{display:none}}
+
+/* ── sidebar ──────────────────────────────────────────────── */
+.side{border-right:1px solid var(--line);overflow-y:auto;padding:20px 14px 140px;background:var(--bg)}
+.side h3{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--fg-dim);margin:0 0 12px;font-weight:400}
+.side section + section{margin-top:26px;padding-top:22px;border-top:1px solid var(--line-soft)}
+.spk{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;transition:background .12s ease}
+.spk:hover{background:var(--surface-2)}
+.spk .key{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;color:var(--fg-dim);
+  width:17px;height:17px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;flex:none;
+}
+.spk .dot{width:9px;height:9px;border-radius:3px;flex:none;background:var(--sc)}
+.spk .nm{flex:1;font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  outline:none;border-radius:4px;padding:1px 4px;margin-left:-4px}
+.spk .nm:focus{background:var(--surface-3);box-shadow:0 0 0 2px var(--sel-line)}
+.spk .ct{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--fg-dim);flex:none}
+.spk .x{font-size:12px;color:var(--fg-dim);opacity:0;padding:0 2px;flex:none;transition:color .12s}
+.spk:hover .x{opacity:1}
+.spk .x:hover{color:var(--danger)}
+.addspk{display:flex;gap:6px;margin-top:10px}
+.addspk input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:7px;
+  padding:6px 10px;font-size:14px;outline:none;color:var(--fg)}
+.addspk input:focus{border-color:var(--accent)}
+.keys{font-size:12.5px;color:var(--fg-mid)}
+.keys div{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:3px 0}
+kbd{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;color:var(--fg);
+  background:var(--surface-2);border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:5px;padding:2px 6px;white-space:nowrap;
+}
+.sideacts{display:flex;flex-direction:column;gap:7px}
+.sideacts .btn{width:100%;text-align:center}
+
+/* ── transcript ───────────────────────────────────────────── */
+.scroll{overflow-y:auto;padding:0 0 240px;scroll-behavior:smooth}
+.sheet{max-width:820px;margin:0 auto;padding:44px 32px 0}
+.sheet .title{
+  font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;font-weight:800;
+  font-size:clamp(28px,4vw,40px);letter-spacing:-.04em;line-height:1.1;margin:0 0 6px;
+}
+.sheet .sub{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11.5px;color:var(--fg-dim);
+  margin-bottom:36px;letter-spacing:-.01em}
+
+.para{position:relative;padding:8px 0 8px 18px;margin-bottom:10px;border-left:2px solid var(--line-soft);
+  transition:border-color .35s ease}
+.para.attr{border-left-color:var(--sc)}
+.phead{display:flex;align-items:center;gap:8px;margin-bottom:5px;line-height:1.2;flex-wrap:wrap}
+.phead .dot{width:7px;height:7px;border-radius:2px;background:var(--sc);flex:none}
+.phead .who{font-size:12.5px;font-weight:600;letter-spacing:-.01em;
+  color:color-mix(in srgb,var(--sc) 72%,var(--fg))}
+.phead .who.none{color:var(--fg-dim);font-weight:400}
+.phead .time,.phead .more{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--fg-dim)}
+.pbtn{position:absolute;left:-22px;top:8px;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;color:var(--fg-dim);
+  opacity:0;transition:opacity .13s ease,background .13s ease,color .13s ease}
+.para:hover .pbtn{opacity:1}
+.pbtn:hover{background:var(--surface-3);color:var(--fg)}
+
+.body{min-width:0}
+.run{-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.run.untagged{border-bottom:1px dashed color-mix(in srgb,var(--fg-dim) 55%,transparent)}
+.run .inchip{
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9.5px;letter-spacing:.03em;
+  color:color-mix(in srgb,var(--sc) 72%,var(--fg));
+  border:1px solid color-mix(in srgb,var(--sc) 40%,transparent);border-radius:5px;
+  padding:1px 5px;margin-right:6px;vertical-align:.1em;white-space:nowrap;
+}
+.sent{
+  cursor:pointer;border-radius:4px;padding:1px 2px;margin:0 -2px;color:var(--fg-dim);
+  transition:color .35s ease,background .12s ease;
+  -webkit-box-decoration-break:clone;box-decoration-break:clone;
+}
+.run.tagged .sent{color:var(--fg)}
+.sent:hover{background:var(--surface-2)}
+.sent.sel{background:var(--sel-bg);box-shadow:inset 0 0 0 1px var(--sel-line);color:var(--fg)}
+
+.sedit{
+  display:block;width:100%;background:var(--surface);border:1px solid var(--accent);border-radius:8px;
+  padding:10px 12px;font-family:inherit;font-size:16px;line-height:1.6;resize:none;outline:none;
+  box-shadow:0 0 0 3px var(--sel-bg);color:var(--fg);
+}
+.edittools{display:flex;gap:7px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.edittools .note{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--fg-dim)}
+
+.endcap{max-width:820px;margin:36px auto 0;padding:0 32px;display:flex;align-items:center;gap:14px;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--fg-dim)}
+.endcap::before,.endcap::after{content:"";height:1px;background:var(--line);flex:1}
+
+/* ── command bar ──────────────────────────────────────────── */
+.cmd{
+  position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);
+  background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(14px) saturate(1.4);
+  border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+  padding:8px;display:flex;align-items:center;gap:6px;z-index:60;
+  opacity:0;pointer-events:none;transition:opacity .16s ease,transform .22s cubic-bezier(.2,.9,.3,1.15);
+  max-width:min(94vw,980px);flex-wrap:wrap;justify-content:center;
+}
+.cmd.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.cmd .count{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--fg-dim);
+  padding:0 9px 0 5px;white-space:nowrap}
+.chip{
+  display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;
+  border:1px solid color-mix(in srgb,var(--sc) 32%,transparent);
+  background:color-mix(in srgb,var(--sc) 10%,transparent);color:var(--fg);
+  font-size:13px;transition:background .12s ease,transform .08s ease;max-width:22ch;
+}
+.chip:hover{background:color-mix(in srgb,var(--sc) 22%,transparent)}
+.chip:active{transform:translateY(1px)}
+.chip .dot{width:7px;height:7px;border-radius:2px;background:var(--sc);flex:none}
+.chip .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .k{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9.5px;color:var(--fg-dim)}
+.cmd .sep{width:1px;align-self:stretch;background:var(--line);margin:2px 3px}
+
+/* ── modal + toast ────────────────────────────────────────── */
+.veil{position:fixed;inset:0;background:color-mix(in srgb,var(--bg) 62%,transparent);
+  backdrop-filter:blur(6px);z-index:80;display:none;align-items:center;justify-content:center;padding:24px}
+.veil.on{display:flex}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  max-width:600px;width:100%;max-height:84vh;overflow:auto;padding:26px 28px}
+.modal h2{font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;font-weight:800;
+  font-size:24px;letter-spacing:-.035em;margin:0 0 4px}
+.modal .sub{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10.5px;color:var(--fg-dim);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:20px}
+.modal .keys div{padding:6px 0;border-bottom:1px solid var(--line-soft)}
+.modal .foot{display:flex;justify-content:flex-end;margin-top:22px}
+
+.toast{position:fixed;left:50%;top:18px;transform:translate(-50%,-12px);
+  background:var(--fg);color:var(--bg);font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11.5px;
+  padding:9px 15px;border-radius:8px;z-index:100;opacity:0;pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease;box-shadow:var(--shadow)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.rise{animation:rise .55s cubic-bezier(.2,.7,.3,1) both}
+.d1{animation-delay:.06s}.d2{animation-delay:.12s}.d3{animation-delay:.18s}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
+  .scroll{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="stage">
+
+<!-- ═══════════ SETUP ═══════════ -->
+<div id="setup">
+  <div class="brand rise">
+    <h1>who<em>dat</em></h1>
+    <span class="pill">transcript attribution</span>
+  </div>
+  <p class="lede rise d1">
+    Drop in a raw transcript and a list of attendees. Tag it down to the <b>sentence</b>,
+    fix or cut the text as you go, then export a <b>self-contained HTML page</b> or
+    <b>tagged markdown</b>. Everything runs in your browser — nothing is uploaded.
+  </p>
+  <div class="rule rise d1"></div>
+
+  <div class="cols">
+    <div class="rise d2">
+      <div class="field">
+        <label class="eyebrow">Meeting title <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input id="title" class="inp" placeholder="Q3 planning sync" autocomplete="off">
+      </div>
+      <div class="field">
+        <label class="eyebrow">Attendees</label>
+        <textarea id="attendees" class="ta" placeholder="Alice Chen&#10;Bob Ramirez&#10;Priya Nair"></textarea>
+        <p class="hint">One per line, or comma separated. You can add and rename people later.</p>
+      </div>
+      <div class="field">
+        <label class="eyebrow">Parsing</label>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="optPrefix" checked><span>Detect <code>Name:</code> prefixes and pre-assign them</span></label>
+          <label class="opt"><input type="checkbox" id="optAdd" checked><span>Add unknown detected names as attendees</span></label>
+          <label class="opt"><input type="checkbox" id="optTime" checked><span>Pull leading timestamps into the margin</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="rise d3">
+      <div class="field">
+        <label class="eyebrow">Transcript</label>
+        <div class="drop" id="drop">
+          <span class="txt" id="dropTxt">Drop a .txt / .md / .vtt file here</span>
+          <button class="btn" id="pick">Choose file</button>
+          <input type="file" id="file" accept=".txt,.md,.markdown,.vtt,.srt,text/*" hidden>
+        </div>
+        <textarea id="rawtext" class="ta" style="margin-top:12px" placeholder="…or paste the transcript text here."></textarea>
+        <p class="hint">Blank lines separate paragraphs. Sentences are detected automatically — split, join and edit them afterwards.</p>
+      </div>
+      <div class="go">
+        <button class="btn primary" id="start">Start tagging →</button>
+        <button class="btn ghost" id="loadProj">Open project .json</button>
+        <input type="file" id="projFile" accept=".json,application/json" hidden>
+        <span class="err" id="setupErr"></span>
+      </div>
+      <div class="resume" id="resume" style="display:none">
+        <span class="t">Unfinished session found — <b id="resumeWhen"></b></span>
+        <span style="display:flex;gap:8px">
+          <button class="btn" id="resumeGo">Resume</button>
+          <button class="btn ghost" id="resumeDrop">Discard</button>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ APP ═══════════ -->
+<div id="app">
+  <header class="topbar">
+    <span class="mark">who<em>dat</em></span>
+    <span class="doc" id="docName">untitled</span>
+    <span class="spacer"></span>
+    <div class="meter"><span class="bar" id="bar"><i></i></span><span class="pct" id="pct">0%</span></div>
+    <button class="btn sm" id="btnNext" title="Jump to the next untagged sentence (Tab)">Next untagged</button>
+    <span class="vr"></span>
+    <button class="btn sm" id="btnMd">Export .md</button>
+    <button class="btn sm" id="btnHtml">Export .html</button>
+    <button class="btn sm ghost" id="btnSave" title="Save an editable project file">Save .json</button>
+    <button class="btn sm ghost" id="btnTheme" title="Toggle light / dark">◐</button>
+    <button class="btn sm ghost" id="btnHelp" title="Keyboard shortcuts">?</button>
+  </header>
+
+  <div class="main">
+    <aside class="side">
+      <section>
+        <h3>Speakers</h3>
+        <div id="spklist"></div>
+        <form class="addspk" id="addspk">
+          <input id="newspk" placeholder="Add someone…" autocomplete="off">
+          <button class="btn sm" type="submit">Add</button>
+        </form>
+      </section>
+      <section>
+        <h3>Keys</h3>
+        <div class="keys">
+          <div><span>Assign speaker</span><kbd>1</kbd></div>
+          <div><span>Clear speaker</span><kbd>0</kbd></div>
+          <div><span>Whole paragraph</span><kbd>A</kbd></div>
+          <div><span>Edit text</span><kbd>E</kbd></div>
+          <div><span>Join sentences</span><kbd>J</kbd></div>
+          <div><span>Break paragraph</span><kbd>S</kbd></div>
+          <div><span>Delete</span><kbd>⌫</kbd></div>
+          <div><span>Next untagged</span><kbd>Tab</kbd></div>
+          <div><span>Undo</span><kbd>⌘Z</kbd></div>
+        </div>
+      </section>
+      <section>
+        <h3>Document</h3>
+        <div class="sideacts">
+          <button class="btn" id="btnRetitle">Rename meeting</button>
+          <button class="btn" id="btnUndo">Undo</button>
+          <button class="btn" id="btnRedo">Redo</button>
+          <button class="btn ghost" id="btnRestart">Start over</button>
+        </div>
+      </section>
+    </aside>
+
+    <div class="scroll" id="scroll">
+      <div class="sheet">
+        <h1 class="title" id="sheetTitle"></h1>
+        <div class="sub" id="sheetSub"></div>
+        <div id="transcript"></div>
+      </div>
+      <div class="endcap">end of transcript</div>
+    </div>
+  </div>
+</div>
+
+<div class="cmd" id="cmd">
+  <span class="count" id="cmdCount">0 selected</span>
+  <span id="cmdChips" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></span>
+  <span class="sep"></span>
+  <button class="btn sm" data-act="clear">Clear</button>
+  <button class="btn sm" data-act="edit">Edit</button>
+  <button class="btn sm" data-act="join">Join</button>
+  <button class="btn sm" data-act="split">Break ¶</button>
+  <button class="btn sm" data-act="del" style="color:var(--danger)">Delete</button>
+</div>
+
+<div class="veil" id="veil"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+</div>
+
+<script>
+"use strict";
+
+/* speaker inks — distinct at a glance, legible on both themes */
+const INKS = ["#5B9CFF","#FF6B81","#34D399","#C084FC","#FBBF24",
+              "#22D3EE","#F472B6","#FB923C","#818CF8","#2DD4BF"];
+
+let state = { title:"", date:"", speakers:[], paragraphs:[] };
+let sel = new Set();      // selected sentence ids
+let anchor = null;        // anchor for shift-ranges
+let editing = null;       // sentence id under edit
+let past = [], future = [];
+let uid = 0;
+const nid = () => "n" + (++uid).toString(36);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ══════════════════════════════════════════════════════════
+   parsing
+   ══════════════════════════════════════════════════════════ */
+const ABBR = /(?:^|[\s("'])(?:mr|mrs|ms|dr|prof|rev|hon|sr|jr|st|vs|etc|approx|dept|est|fig|no|vol|al|inc|ltd|co|corp|univ|min|sec|hr|hrs|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|e\.g|i\.e|a\.m|p\.m|u\.s|u\.k)\.$/i;
+
+function splitSentences(text){
+  const t = String(text).replace(/\s+/g," ").trim();
+  if(!t) return [];
+  const out = [];
+  let start = 0;
+  for(let i=0;i<t.length;i++){
+    const c = t[i];
+    if(c!=="."&&c!=="!"&&c!=="?"&&c!=="…") continue;
+    let j = i;
+    while(j+1<t.length && /[.!?…]/.test(t[j+1])) j++;        // ellipsis, ?!
+    while(j+1<t.length && /["'”’)\]]/.test(t[j+1])) j++;      // trailing quotes
+    if(j+1 >= t.length) break;
+    if(t[j+1] !== " "){ i = j; continue; }
+    const head = t.slice(start, j+1);
+    if(t[j] === "."){
+      if(ABBR.test(head)){ i = j; continue; }                            // Dr. / e.g.
+      if(/(?:^|[\s("'])[A-Z]\.$/.test(head)){ i = j; continue; }          // single initial
+      if(/\d\.$/.test(head) && /^\s*\d/.test(t.slice(j+1))){ i = j; continue; }
+      if(!/^["'“‘(\[]?[A-ZÅÄÖÆØÉÈÜÑ0-9—–-]/.test(t.slice(j+2))){ i = j; continue; }
+    }
+    const piece = head.trim();
+    if(piece) out.push(piece);
+    start = j+2; i = j+1;
+  }
+  const tail = t.slice(start).trim();
+  if(tail) out.push(tail);
+  return out.length ? out : [t];
+}
+
+const TIME_RE = /^\s*[\[(]?\s*((?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)\s*[\])]?\s*[-–—]?\s*/;
+const PREFIX_RE = /^\s*([^:\n]{1,48}?)\s*:\s+/;
+
+function looksLikeName(s){
+  if(!s) return false;
+  const w = s.trim().split(/\s+/);
+  if(w.length > 4) return false;
+  if(/[.!?,;]$/.test(s.trim())) return false;
+  return w.every(x => /^[\p{Lu}\p{Lo}][\p{L}''\-.]*$/u.test(x) || /^[\p{Lu}]+$/u.test(x));
+}
+
+function parseTranscript(raw, opts){
+  let text = String(raw).replace(/\r\n?/g,"\n").replace(/ /g," ");
+  text = text.replace(/^WEBVTT.*$/m,"")
+             .replace(/^\d+\s*$/gm,"")
+             .replace(/^\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->.*$/gm, m => {
+               const t = m.match(/^(\d{1,2}:\d{2}:\d{2})/); return t ? "["+t[1]+"] " : "";
+             });
+  const chunks = /\n[ \t]*\n/.test(text) ? text.split(/\n[ \t]*\n+/) : text.split(/\n+/);
+  const paras = [];
+  for(const chunk of chunks){
+    let body = chunk.replace(/\n+/g," ").trim();
+    if(!body) continue;
+    let time = null, spk = null;
+    if(opts.time){
+      const m = body.match(TIME_RE);
+      if(m){ time = m[1]; body = body.slice(m[0].length); }
+    }
+    if(opts.prefix){
+      const m = body.match(PREFIX_RE);
+      if(m){
+        const cand = m[1].replace(/\s*\(.*?\)\s*$/,"").trim();
+        const known = findSpeakerByName(cand);
+        if(known){ spk = known; body = body.slice(m[0].length); }
+        else if(opts.addNames && looksLikeName(cand)){ spk = addSpeaker(cand); body = body.slice(m[0].length); }
+      }
+      if(!time && opts.time){
+        const m2 = body.match(TIME_RE);
+        if(m2){ time = m2[1]; body = body.slice(m2[0].length); }
+      }
+    }
+    body = body.trim();
+    if(!body) continue;
+    paras.push({ id:nid(), time,
+      sentences: splitSentences(body).map(t => ({ id:nid(), text:t, speakerId: spk ? spk.id : null })) });
+  }
+  return paras;
+}
+
+/* ── speakers ─────────────────────────────────────────────── */
+function findSpeakerByName(name){
+  if(!name) return null;
+  const n = name.trim().toLowerCase();
+  let hit = state.speakers.find(s => s.name.toLowerCase() === n);
+  if(hit) return hit;
+  return state.speakers.find(s => {                     // "Alice" ↔ "Alice Chen"
+    const sn = s.name.toLowerCase();
+    return sn.split(/\s+/)[0] === n.split(/\s+/)[0] && (sn.startsWith(n) || n.startsWith(sn));
+  }) || null;
+}
+function addSpeaker(name){
+  const clean = String(name).trim();
+  if(!clean) return null;
+  const dupe = state.speakers.find(s => s.name.toLowerCase() === clean.toLowerCase());
+  if(dupe) return dupe;
+  const s = { id:nid(), name:clean, color:INKS[state.speakers.length % INKS.length] };
+  state.speakers.push(s);
+  return s;
+}
+const speakerOf = id => id ? state.speakers.find(s => s.id === id) || null : null;
+
+/* ══════════════════════════════════════════════════════════
+   history
+   ══════════════════════════════════════════════════════════ */
+const snap = () => JSON.stringify({ title:state.title, date:state.date,
+                                    speakers:state.speakers, paragraphs:state.paragraphs });
+function commit(){ past.push(snap()); if(past.length > 120) past.shift(); future.length = 0; }
+function restore(json){
+  const o = JSON.parse(json);
+  state.title = o.title; state.date = o.date;
+  state.speakers = o.speakers; state.paragraphs = o.paragraphs;
+  const live = new Set();
+  state.paragraphs.forEach(p => p.sentences.forEach(s => live.add(s.id)));
+  sel = new Set(Array.from(sel).filter(id => live.has(id)));
+  editing = null;
+}
+function undo(){ if(!past.length) return toast("Nothing to undo");
+  future.push(snap()); restore(past.pop()); render(); save(); }
+function redo(){ if(!future.length) return toast("Nothing to redo");
+  past.push(snap()); restore(future.pop()); render(); save(); }
+
+/* ══════════════════════════════════════════════════════════
+   selection
+   ══════════════════════════════════════════════════════════ */
+function flat(){
+  const out = [];
+  state.paragraphs.forEach((p,pi) => p.sentences.forEach((s,si) => out.push({ s, p, pi, si })));
+  return out;
+}
+const selectedFlat = () => flat().filter(x => sel.has(x.s.id));
+
+function pick(id, mode){
+  if(mode === "range" && anchor != null){
+    const f = flat();
+    const a = f.findIndex(x => x.s.id === anchor);
+    const b = f.findIndex(x => x.s.id === id);
+    if(a >= 0 && b >= 0) sel = new Set(f.slice(Math.min(a,b), Math.max(a,b)+1).map(x => x.s.id));
+  } else if(mode === "toggle"){
+    sel.has(id) ? sel.delete(id) : sel.add(id);
+    anchor = id;
+  } else {
+    sel = new Set([id]); anchor = id;
+  }
+  editing = null;
+  render();
+}
+function clearSel(){ sel.clear(); anchor = null; editing = null; render(); }
+
+/* ══════════════════════════════════════════════════════════
+   mutations
+   ══════════════════════════════════════════════════════════ */
+function assign(speakerId){
+  if(!sel.size) return;
+  commit();
+  state.paragraphs.forEach(p => p.sentences.forEach(s => { if(sel.has(s.id)) s.speakerId = speakerId; }));
+  render(); save();
+}
+function nextAfterSelection(){
+  const f = flat();
+  const ids = f.map(x => x.s.id).filter(id => sel.has(id));
+  const last = ids[ids.length-1];
+  if(!last) return null;
+  const i = f.findIndex(x => x.s.id === last);
+  for(let k=i+1;k<f.length;k++) if(!sel.has(f[k].s.id)) return f[k].s.id;
+  for(let k=i-1;k>=0;k--) if(!sel.has(f[k].s.id)) return f[k].s.id;
+  return null;
+}
+function deleteSelected(){
+  if(!sel.size) return;
+  commit();
+  const next = nextAfterSelection();
+  state.paragraphs.forEach(p => p.sentences = p.sentences.filter(s => !sel.has(s.id)));
+  state.paragraphs = state.paragraphs.filter(p => p.sentences.length);
+  sel = new Set(); anchor = null;
+  if(next){ sel.add(next); anchor = next; }
+  render(); save();
+}
+function joinSelected(){
+  const chosen = selectedFlat();
+  if(chosen.length < 2) return toast("Select two or more sentences to join");
+  const p = chosen[0].p;
+  if(!chosen.every(c => c.p === p)) return toast("Join only works inside one paragraph");
+  const idxs = chosen.map(c => c.si).sort((a,b) => a-b);
+  if(idxs[idxs.length-1] - idxs[0] !== idxs.length-1) return toast("Selection must be contiguous");
+  commit();
+  const keep = p.sentences[idxs[0]];
+  keep.text = idxs.map(i => p.sentences[i].text).join(" ").replace(/\s+/g," ").trim();
+  keep.speakerId = idxs.map(i => p.sentences[i].speakerId).find(x => x) || null;
+  p.sentences.splice(idxs[0]+1, idxs.length-1);
+  sel = new Set([keep.id]); anchor = keep.id;
+  render(); save();
+}
+function breakParagraph(){
+  const chosen = selectedFlat();
+  if(chosen.length !== 1) return toast("Select one sentence to break the paragraph there");
+  const { p, si, pi } = chosen[0];
+  if(si === 0) return toast("Already the start of a paragraph");
+  commit();
+  const tail = p.sentences.splice(si);
+  state.paragraphs.splice(pi+1, 0, { id:nid(), time:null, sentences:tail });
+  render(); save();
+}
+function splitSentenceAt(id, offset){
+  const f = flat().find(x => x.s.id === id);
+  if(!f) return;
+  const a = f.s.text.slice(0, offset).trim();
+  const b = f.s.text.slice(offset).trim();
+  if(!a || !b) return toast("Put the cursor inside the sentence first");
+  commit();
+  f.s.text = a;
+  const nu = { id:nid(), text:b, speakerId:f.s.speakerId };
+  f.p.sentences.splice(f.si+1, 0, nu);
+  editing = null; sel = new Set([nu.id]); anchor = nu.id;
+  render(); save();
+}
+function saveEdit(id, text){
+  const f = flat().find(x => x.s.id === id);
+  if(!f) return;
+  const clean = text.replace(/\s+/g," ").trim();
+  if(!clean){ editing = null; return deleteSelected(); }
+  if(clean !== f.s.text){ commit(); f.s.text = clean; }
+  editing = null; render(); save();
+}
+function selectParagraphOf(id){
+  const f = flat().find(x => x.s.id === id);
+  if(!f) return;
+  sel = new Set(f.p.sentences.map(s => s.id));
+  anchor = f.p.sentences[0].id;
+  render();
+}
+function removeSpeaker(id){
+  commit();
+  state.speakers = state.speakers.filter(s => s.id !== id);
+  state.paragraphs.forEach(p => p.sentences.forEach(s => { if(s.speakerId === id) s.speakerId = null; }));
+  render(); save();
+}
+
+/* ══════════════════════════════════════════════════════════
+   render
+   ══════════════════════════════════════════════════════════ */
+function runsOf(p){
+  const runs = [];
+  p.sentences.forEach(s => {
+    const last = runs[runs.length-1];
+    if(last && last.speakerId === s.speakerId) last.sentences.push(s);
+    else runs.push({ speakerId:s.speakerId, sentences:[s] });
+  });
+  return runs;
+}
+
+function render(){
+  $("#sheetTitle").textContent = state.title || "Untitled meeting";
+  $("#sheetSub").textContent = [state.date, state.speakers.map(s => s.name).join(" · ")]
+    .filter(Boolean).join("  ·  ");
+  $("#docName").textContent = state.title || "untitled";
+
+  let html = "";
+  state.paragraphs.forEach(p => {
+    const runs = runsOf(p);
+    const first = speakerOf(runs[0] && runs[0].speakerId);
+    // Only call out speaker changes when the paragraph genuinely holds more than
+    // one voice — a single speaker with untagged gaps needs no repeated labels.
+    const voices = new Set(runs.map(r => r.speakerId).filter(Boolean));
+    const others = first ? voices.size - 1 : voices.size;
+    html += `<div class="para${first ? " attr" : ""}" data-p="${p.id}"${first ? ` style="--sc:${first.color}"` : ""}>`;
+    html +=   `<button class="pbtn" data-para="${p.id}" title="Select the whole paragraph">¶</button>`;
+    html +=   `<div class="phead">`;
+    html +=     first ? `<span class="dot"></span><span class="who">${esc(first.name)}</span>`
+                      : `<span class="who none">unattributed</span>`;
+    if(p.time) html += `<span class="time">${esc(p.time)}</span>`;
+    if(others > 0) html += `<span class="more">+${others} more</span>`;
+    html +=   `</div><div class="body">`;
+    runs.forEach(r => {
+      const sp = speakerOf(r.speakerId);
+      html += `<span class="run ${sp ? "tagged" : "untagged"}"${sp ? ` style="--sc:${sp.color}"` : ""}>`;
+      if(sp && voices.size > 1) html += `<span class="inchip">${esc(sp.name)}</span>`;
+      r.sentences.forEach(s => {
+        if(editing === s.id){
+          html += `<textarea class="sedit" data-edit="${s.id}">${esc(s.text)}</textarea>`
+               +  `<span class="edittools">`
+               +    `<button class="btn sm primary" data-act="esave">Save</button>`
+               +    `<button class="btn sm" data-act="esplit">Split at cursor</button>`
+               +    `<button class="btn sm ghost" data-act="ecancel">Cancel</button>`
+               +    `<span class="note">⌘↩ save · esc cancel</span>`
+               +  `</span>`;
+        } else {
+          html += `<span class="sent${sel.has(s.id) ? " sel" : ""}" data-s="${s.id}">${esc(s.text)}</span> `;
+        }
+      });
+      html += `</span>`;
+    });
+    html += `</div></div>`;
+  });
+  $("#transcript").innerHTML = html ||
+    `<p style="color:var(--fg-dim)">Nothing left in this transcript.</p>`;
+
+  if(editing){
+    const ta = $(`[data-edit="${editing}"]`);
+    if(ta){ autosize(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+  renderSpeakers(); renderCmd(); renderProgress();
+}
+
+function renderSpeakers(){
+  const counts = {};
+  state.paragraphs.forEach(p => p.sentences.forEach(s => {
+    if(s.speakerId) counts[s.speakerId] = (counts[s.speakerId] || 0) + 1;
+  }));
+  $("#spklist").innerHTML = state.speakers.map((s,i) => `
+    <div class="spk" style="--sc:${s.color}" data-spk="${s.id}">
+      <span class="key">${i < 9 ? i+1 : "·"}</span>
+      <span class="dot"></span>
+      <span class="nm" contenteditable="plaintext-only" spellcheck="false" data-rename="${s.id}">${esc(s.name)}</span>
+      <span class="ct">${counts[s.id] || 0}</span>
+      <button class="x" data-del="${s.id}" title="Remove speaker">✕</button>
+    </div>`).join("") ||
+    `<p style="font-size:13px;color:var(--fg-dim);margin:0">No one yet — add someone below.</p>`;
+}
+
+function renderCmd(){
+  $("#cmd").classList.toggle("on", sel.size > 0 && !editing);
+  if(!sel.size) return;
+  $("#cmdCount").textContent = sel.size + " selected";
+  $("#cmdChips").innerHTML = state.speakers.map((s,i) => `
+    <button class="chip" style="--sc:${s.color}" data-assign="${s.id}">
+      <span class="dot"></span><span class="n">${esc(s.name)}</span>
+      ${i < 9 ? `<span class="k">${i+1}</span>` : ""}
+    </button>`).join("");
+}
+
+function renderProgress(){
+  let total = 0, done = 0;
+  state.paragraphs.forEach(p => p.sentences.forEach(s => { total++; if(s.speakerId) done++; }));
+  const pct = total ? Math.round(done/total*100) : 0;
+  $("#bar").querySelector("i").style.width = pct + "%";
+  $("#pct").textContent = pct + "%";
+  $("#pct").title = done + " of " + total + " sentences attributed";
+  $("#btnNext").disabled = (done === total);
+}
+function autosize(ta){ ta.style.height = "auto"; ta.style.height = (ta.scrollHeight + 2) + "px"; }
+
+/* ── navigation ───────────────────────────────────────────── */
+function gotoNextUntagged(){
+  const f = flat();
+  if(!f.length) return;
+  const from = anchor ? f.findIndex(x => x.s.id === anchor) : -1;
+  const hit = f.slice(from+1).find(x => !x.s.speakerId) || f.find(x => !x.s.speakerId);
+  if(!hit) return toast("Everything is attributed ✓");
+  sel = new Set([hit.s.id]); anchor = hit.s.id; editing = null;
+  render(); scrollToSel();
+}
+function move(delta, extend){
+  const f = flat();
+  if(!f.length) return;
+  const i = anchor ? f.findIndex(x => x.s.id === anchor) : -1;
+  const j = i < 0 ? 0 : Math.max(0, Math.min(f.length-1, i + delta));
+  const id = f[j].s.id;
+  if(extend) sel.add(id); else sel = new Set([id]);
+  anchor = id; editing = null;
+  render(); scrollToSel();
+}
+function scrollToSel(){
+  const el = $(".sent.sel");
+  if(!el) return;
+  const box = $("#scroll").getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  if(r.top < box.top + 90 || r.bottom > box.bottom - 150)
+    el.scrollIntoView({ block:"center" });
+}
+
+/* ══════════════════════════════════════════════════════════
+   export
+   ══════════════════════════════════════════════════════════ */
+function outputBlocks(){
+  const blocks = [];
+  state.paragraphs.forEach(p => {
+    runsOf(p).forEach((r,i) => blocks.push({
+      speaker: speakerOf(r.speakerId),
+      time: i === 0 ? p.time : null,
+      text: r.sentences.map(s => s.text).join(" ").replace(/\s+/g," ").trim()
+    }));
+  });
+  return blocks.filter(b => b.text);
+}
+
+function toMarkdown(){
+  const L = ["# " + (state.title || "Meeting transcript"), ""];
+  if(state.date) L.push("*" + state.date + "*", "");
+  if(state.speakers.length) L.push("**Attendees:** " + state.speakers.map(s => s.name).join(", "), "");
+  L.push("---", "");
+  outputBlocks().forEach(b => {
+    L.push("**" + (b.speaker ? b.speaker.name : "Unattributed") +
+           (b.time ? " (" + b.time + ")" : "") + ":** " + b.text, "");
+  });
+  return L.join("\n").replace(/\n{3,}/g,"\n\n").trim() + "\n";
+}
+
+function toHTML(){
+  const blocks = outputBlocks();
+  const used = state.speakers.filter(s => blocks.some(b => b.speaker && b.speaker.id === s.id));
+  const orphans = blocks.some(b => !b.speaker);
+  const title = state.title || "Meeting transcript";
+
+  const legend = used.map(s =>
+    `<button class="lg on" data-f="${esc(s.id)}" style="--sc:${s.color}"><i></i>${esc(s.name)}</button>`
+  ).join("") + (orphans ? `<button class="lg on" data-f="none" style="--sc:#8A8A94"><i></i>Unattributed</button>` : "");
+
+  const body = blocks.map(b => `
+  <article class="b${b.speaker ? "" : " none"}" data-w="${b.speaker ? esc(b.speaker.id) : "none"}"${
+      b.speaker ? ` style="--sc:${b.speaker.color}"` : ""}>
+    <div class="h">${b.speaker ? `<span class="d"></span><span class="n">${esc(b.speaker.name)}</span>`
+                                : `<span class="n">unattributed</span>`}${
+      b.time ? `<span class="t">${esc(b.time)}</span>` : ""}</div>
+    <p>${esc(b.text)}</p>
+  </article>`).join("");
+
+  const css = `
+:root{--bg:#0B0B0D;--surface:#121216;--surface-2:#191920;--line:#26262F;--fg:#ECECF1;--fg-mid:#9A9AA8;--fg-dim:#5A5A69;--accent:#CCFF33;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#FFF;--surface:#FAFAFA;--surface-2:#F3F3F6;--line:#E3E3EA;--fg:#0C0C10;--fg-mid:#61616E;--fg-dim:#A2A2B0;--accent:#5B8C00;color-scheme:light}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.62 "Instrument Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;letter-spacing:-.005em;-webkit-font-smoothing:antialiased}
+.wrap{max-width:780px;margin:0 auto;padding:56px 28px 120px}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.04em;line-height:1.1;margin:0 0 8px}
+.meta{font:11.5px/1.7 ui-monospace,"SF Mono",Menlo,monospace;color:var(--fg-dim);letter-spacing:-.01em}
+.tools{margin:28px 0 10px}
+#q{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:10px 13px;font:14px/1.4 inherit;color:var(--fg);outline:none}
+#q::placeholder{color:var(--fg-dim)}
+#q:focus{border-color:var(--accent)}
+.legend{display:flex;gap:6px;flex-wrap:wrap}
+.lg{display:inline-flex;align-items:center;gap:7px;cursor:pointer;background:none;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 10px;font:12px/1 inherit;opacity:.42;transition:opacity .15s,border-color .15s}
+.lg.on{opacity:1;border-color:color-mix(in srgb,var(--sc) 32%,transparent);background:color-mix(in srgb,var(--sc) 9%,transparent)}
+.lg i{width:7px;height:7px;border-radius:2px;background:var(--sc);display:block}
+hr{border:none;border-top:1px solid var(--line);margin:24px 0 6px}
+.b{padding:10px 0 10px 16px;margin-bottom:10px;border-left:2px solid var(--sc,var(--line))}
+.b.none{border-left-color:var(--line)}
+.b.hide{display:none}
+.h{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.h .d{width:7px;height:7px;border-radius:2px;background:var(--sc)}
+.h .n{font-size:12.5px;font-weight:600;letter-spacing:-.01em;color:color-mix(in srgb,var(--sc) 72%,var(--fg))}
+.b.none .h .n{color:var(--fg-dim);font-weight:400}
+.h .t{font:10.5px/1 ui-monospace,"SF Mono",Menlo,monospace;color:var(--fg-dim)}
+.b p{margin:0}
+.b.none p{color:var(--fg-mid)}
+mark{background:var(--accent);color:#0B0B0D;border-radius:3px;padding:0 1px}
+.foot{margin-top:56px;border-top:1px solid var(--line);padding-top:14px;font:11px/1.6 ui-monospace,"SF Mono",Menlo,monospace;color:var(--fg-dim)}
+.foot a{color:var(--fg-mid)}
+@media print{body{background:#fff;color:#000}.tools,.legend{display:none}.wrap{padding:0}.b{break-inside:avoid}}`;
+
+  const js = `
+(function(){
+  var hidden={};
+  document.querySelectorAll('.lg').forEach(function(b){
+    b.addEventListener('click',function(){
+      var k=b.dataset.f; hidden[k]=!hidden[k];
+      b.classList.toggle('on',!hidden[k]);
+      document.querySelectorAll('.b').forEach(function(el){
+        el.classList.toggle('hide',!!hidden[el.dataset.w]);
+      });
+    });
+  });
+  var q=document.getElementById('q');
+  var paras=[].slice.call(document.querySelectorAll('.b p'));
+  var orig=paras.map(function(p){return p.textContent});
+  q.addEventListener('input',function(){
+    var v=q.value.trim();
+    paras.forEach(function(p,i){
+      var t=orig[i];
+      if(!v){p.textContent=t;return}
+      var rx=new RegExp('('+v.replace(/[.*+?^\${}()|[\\]\\\\]/g,'\\\\$&')+')','ig');
+      p.innerHTML=t.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]}).replace(rx,'<mark>$1</mark>');
+    });
+  });
+})();`;
+
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<style>${css}</style>
+</head><body>
+<div class="wrap">
+  <h1>${esc(title)}</h1>
+  <div class="meta">${[esc(state.date || ""), state.speakers.map(s => esc(s.name)).join(" · ")]
+      .filter(Boolean).join(" &nbsp;·&nbsp; ")}</div>
+  <div class="tools"><input id="q" placeholder="Search the transcript…" autocomplete="off"></div>
+  <div class="legend">${legend}</div>
+  <hr>
+  ${body}
+  <div class="foot">${blocks.length} passages · tagged with Whodat</div>
+</div>
+<script>${js}<\/script>
+</body></html>`;
+}
+
+function download(name, text, mime){
+  const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 400);
+}
+const slug = () => (state.title || "transcript").toLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu,"-").replace(/^-|-$/g,"").slice(0,60) || "transcript";
+
+/* ══════════════════════════════════════════════════════════
+   persistence — storage can throw outright on opaque origins
+   and in some private modes; never let that take the app down
+   ══════════════════════════════════════════════════════════ */
+const KEY = "whodat.session.v1";
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => store.set(KEY, JSON.stringify({
+    at: Date.now(), title:state.title, date:state.date,
+    speakers:state.speakers, paragraphs:state.paragraphs
+  })), 400);
+}
+function loadSaved(){
+  const raw = store.get(KEY);
+  if(!raw) return null;
+  try{ return JSON.parse(raw); }catch(e){ return null; }
+}
+function adoptProject(o){
+  state.title = o.title || "";
+  state.date  = o.date || "";
+  state.speakers = (o.speakers || []).map((s,i) => ({
+    id: s.id || nid(), name: s.name || ("Speaker " + (i+1)), color: s.color || INKS[i % INKS.length] }));
+  state.paragraphs = (o.paragraphs || []).map(p => ({
+    id: p.id || nid(), time: p.time || null,
+    sentences: (p.sentences || []).map(s => ({
+      id: s.id || nid(), text: s.text || "", speakerId: s.speakerId || null })).filter(s => s.text)
+  })).filter(p => p.sentences.length);
+  uid = Math.max(uid, 1000 + state.paragraphs.length * 4 + state.speakers.length);
+  past = []; future = []; sel = new Set(); anchor = null; editing = null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   setup screen
+   ══════════════════════════════════════════════════════════ */
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+$("#pick").onclick = () => $("#file").click();
+$("#file").onchange = e => { const f = e.target.files[0]; if(f) readFile(f); };
+function readFile(f){
+  const r = new FileReader();
+  r.onload = () => { $("#rawtext").value = r.result; $("#dropTxt").textContent = f.name + " loaded"; };
+  r.readAsText(f);
+}
+const drop = $("#drop");
+["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if(f) f.name.endsWith(".json") ? readProject(f) : readFile(f);
+});
+
+$("#loadProj").onclick = () => $("#projFile").click();
+$("#projFile").onchange = e => { const f = e.target.files[0]; if(f) readProject(f); };
+function readProject(f){
+  const r = new FileReader();
+  r.onload = () => {
+    try{ adoptProject(JSON.parse(r.result)); enterApp(); toast("Project opened"); }
+    catch(err){ $("#setupErr").textContent = "That file isn't a Whodat project."; }
+  };
+  r.readAsText(f);
+}
+
+$("#start").onclick = () => {
+  const raw = $("#rawtext").value.trim();
+  if(!raw){ $("#setupErr").textContent = "Paste or drop a transcript first."; return; }
+  state = { title: $("#title").value.trim(), date: new Date().toISOString().slice(0,10),
+            speakers: [], paragraphs: [] };
+  $("#attendees").value.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).forEach(addSpeaker);
+  state.paragraphs = parseTranscript(raw, {
+    prefix: $("#optPrefix").checked, addNames: $("#optAdd").checked, time: $("#optTime").checked });
+  if(!state.paragraphs.length){ $("#setupErr").textContent = "Couldn't find any text in there."; return; }
+  past = []; future = []; sel = new Set(); anchor = null;
+  enterApp(); save();
+};
+
+function enterApp(){
+  $("#setup").style.display = "none";
+  $("#app").classList.add("on");
+  anchor = null;
+  render();
+}
+
+(function(){
+  const s = loadSaved();
+  if(s && s.paragraphs && s.paragraphs.length){
+    $("#resume").style.display = "flex";
+    $("#resumeWhen").textContent = (s.title ? "“" + s.title + "”, " : "") + new Date(s.at).toLocaleString();
+    $("#resumeGo").onclick = () => { adoptProject(s); enterApp(); };
+    $("#resumeDrop").onclick = () => { store.del(KEY); $("#resume").style.display = "none"; };
+  }
+})();
+
+(function(){
+  const t = store.get("whodat.theme");
+  document.documentElement.dataset.theme =
+    t || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+})();
+$("#btnTheme").onclick = () => {
+  const d = document.documentElement;
+  d.dataset.theme = d.dataset.theme === "dark" ? "light" : "dark";
+  store.set("whodat.theme", d.dataset.theme);
+};
+
+/* ══════════════════════════════════════════════════════════
+   app events
+   ══════════════════════════════════════════════════════════ */
+$("#transcript").addEventListener("mousedown", e => {
+  // Decide everything up front: render() below detaches e.target, after which
+  // closest() lookups further along the bubble path can't be trusted.
+  const sent = e.target.closest(".sent");
+  const pbtn = e.target.closest(".pbtn");
+  if(sent || pbtn || e.target.closest(".sedit") || e.target.closest(".edittools")) e._whodat = true;
+  if(pbtn){
+    const p = state.paragraphs.find(x => x.id === pbtn.dataset.para);
+    if(p){ sel = new Set(p.sentences.map(s => s.id)); anchor = p.sentences[0].id; editing = null; render(); }
+    e.preventDefault(); return;
+  }
+  if(sent){
+    e.preventDefault();
+    pick(sent.dataset.s, e.shiftKey ? "range" : (e.metaKey || e.ctrlKey) ? "toggle" : "one");
+  }
+});
+$("#transcript").addEventListener("dblclick", e => {
+  const sent = e.target.closest(".sent");
+  if(sent){ sel = new Set([sent.dataset.s]); anchor = sent.dataset.s; editing = sent.dataset.s; render(); }
+});
+$("#transcript").addEventListener("input", e => {
+  if(e.target.classList.contains("sedit")) autosize(e.target);
+});
+$("#transcript").addEventListener("keydown", e => {
+  if(!e.target.classList.contains("sedit")) return;
+  if(e.key === "Escape"){ editing = null; render(); }
+  if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ e.preventDefault(); saveEdit(editing, e.target.value); }
+});
+$("#transcript").addEventListener("click", e => {
+  const act = e.target.closest("[data-act]");
+  const ta = $(".sedit");
+  if(!act || !ta) return;
+  if(act.dataset.act === "esave")   saveEdit(editing, ta.value);
+  if(act.dataset.act === "ecancel"){ editing = null; render(); }
+  if(act.dataset.act === "esplit")  splitSentenceAt(editing, ta.selectionStart);
+});
+$("#scroll").addEventListener("mousedown", e => {
+  if(e._whodat || e.target.closest("button")) return;   // handled deeper in the tree
+  if(sel.size) clearSel();
+});
+
+$("#cmd").addEventListener("click", e => {
+  const chip = e.target.closest("[data-assign]");
+  if(chip) return assign(chip.dataset.assign);
+  const b = e.target.closest("[data-act]");
+  if(!b) return;
+  ({ clear: () => assign(null),
+     edit:  () => { const f = selectedFlat();
+                    if(f.length !== 1) return toast("Select a single sentence to edit");
+                    editing = f[0].s.id; render(); },
+     join:  joinSelected,
+     split: breakParagraph,
+     del:   deleteSelected })[b.dataset.act]();
+});
+
+$("#spklist").addEventListener("click", e => {
+  const x = e.target.closest("[data-del]");
+  if(x){
+    const s = speakerOf(x.dataset.del);
+    if(s && confirm(`Remove ${s.name}? Their lines become unattributed.`)) removeSpeaker(s.id);
+    return;
+  }
+  const row = e.target.closest("[data-spk]");
+  if(row && !e.target.closest("[data-rename]") && sel.size) assign(row.dataset.spk);
+});
+$("#spklist").addEventListener("focusin", e => {
+  if(e.target.dataset && e.target.dataset.rename) e.target._was = e.target.textContent;
+});
+$("#spklist").addEventListener("keydown", e => {
+  if(!e.target.dataset || !e.target.dataset.rename) return;
+  if(e.key === "Enter"){ e.preventDefault(); e.target.blur(); }
+  if(e.key === "Escape"){ e.target.textContent = e.target._was; e.target.blur(); }
+  e.stopPropagation();
+});
+$("#spklist").addEventListener("focusout", e => {
+  const id = e.target.dataset && e.target.dataset.rename;
+  if(!id) return;
+  const s = speakerOf(id);
+  if(!s) return;
+  const name = e.target.textContent.replace(/\s+/g," ").trim();
+  if(!name || name === s.name){ render(); return; }
+  commit(); s.name = name; render(); save();
+});
+$("#addspk").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = $("#newspk").value.trim();
+  if(!v) return;
+  commit(); addSpeaker(v); $("#newspk").value = "";
+  render(); save();
+});
+
+$("#btnNext").onclick = gotoNextUntagged;
+$("#btnUndo").onclick = undo;
+$("#btnRedo").onclick = redo;
+$("#btnMd").onclick   = () => { download(slug() + ".md", toMarkdown(), "text/markdown"); toast("Markdown exported"); };
+$("#btnHtml").onclick = () => { download(slug() + ".html", toHTML(), "text/html"); toast("HTML page exported"); };
+$("#btnSave").onclick = () => {
+  download(slug() + ".whodat.json", JSON.stringify({ app:"whodat", version:1,
+    title:state.title, date:state.date, speakers:state.speakers, paragraphs:state.paragraphs }, null, 2),
+    "application/json");
+  toast("Project saved");
+};
+$("#btnRetitle").onclick = () => {
+  const t = prompt("Meeting title", state.title || "");
+  if(t === null) return;
+  commit(); state.title = t.trim(); render(); save();
+};
+$("#btnRestart").onclick = () => {
+  if(!confirm("Discard this session and go back to the start?")) return;
+  store.del(KEY); location.reload();
+};
+$("#btnHelp").onclick = showHelp;
+
+function showHelp(){
+  $("#modal").innerHTML = `
+    <h2>Working the transcript</h2>
+    <div class="sub">mouse · keyboard · exports</div>
+    <div class="keys">
+      <div><span>Select a sentence</span><kbd>click</kbd></div>
+      <div><span>Extend the selection</span><kbd>shift + click</kbd></div>
+      <div><span>Add or remove one</span><kbd>⌘ click</kbd></div>
+      <div><span>Select the whole paragraph</span><span><kbd>A</kbd> <kbd>¶</kbd></span></div>
+      <div><span>Attribute to speaker 1…9</span><span><kbd>1</kbd> … <kbd>9</kbd></span></div>
+      <div><span>Remove attribution</span><kbd>0</kbd></div>
+      <div><span>Edit the text</span><span><kbd>E</kbd> <kbd>double-click</kbd></span></div>
+      <div><span>Save an edit / cancel</span><span><kbd>⌘ ↩</kbd> <kbd>esc</kbd></span></div>
+      <div><span>Split a sentence</span><span><kbd>Split at cursor</kbd> while editing</span></div>
+      <div><span>Join selected sentences</span><kbd>J</kbd></div>
+      <div><span>Break the paragraph here</span><kbd>S</kbd></div>
+      <div><span>Delete the selection</span><kbd>⌫</kbd></div>
+      <div><span>Move / extend</span><span><kbd>↑ ↓</kbd> <kbd>⇧ ↑ ↓</kbd></span></div>
+      <div><span>Next unattributed</span><kbd>Tab</kbd></div>
+      <div><span>Undo / redo</span><span><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></span></div>
+      <div><span>Save project file</span><kbd>⌘S</kbd></div>
+      <div style="border:none;padding-top:14px;color:var(--fg-dim);display:block">
+        Work is kept in this browser automatically. <b>Save .json</b> to carry it between machines.</div>
+    </div>
+    <div class="foot"><button class="btn primary" data-close>Back to it</button></div>`;
+  $("#veil").classList.add("on");
+}
+$("#veil").addEventListener("click", e => {
+  if(e.target === $("#veil") || e.target.closest("[data-close]")) $("#veil").classList.remove("on");
+});
+
+/* ── keyboard ─────────────────────────────────────────────── */
+document.addEventListener("keydown", e => {
+  if(!$("#app").classList.contains("on")) return;
+  const t = e.target;
+  const typing = !!t && typeof t.matches === "function" &&
+                 (t.matches("input, textarea") || t.isContentEditable);
+  const mod = e.metaKey || e.ctrlKey;
+
+  if(mod && e.key.toLowerCase() === "z"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if(mod && e.key.toLowerCase() === "s"){ e.preventDefault(); $("#btnSave").click(); return; }
+  if(typing) return;
+
+  if(e.key === "Escape"){ $("#veil").classList.remove("on"); clearSel(); return; }
+  if(e.key === "Tab"){ e.preventDefault(); gotoNextUntagged(); return; }
+  if(e.key === "?"){ showHelp(); return; }
+  if(e.key === "ArrowDown"){ e.preventDefault(); move(1, e.shiftKey); return; }
+  if(e.key === "ArrowUp"){ e.preventDefault(); move(-1, e.shiftKey); return; }
+  if(!sel.size) return;
+
+  if(/^[1-9]$/.test(e.key)){
+    const s = state.speakers[Number(e.key)-1];
+    if(s){ e.preventDefault(); assign(s.id); }
+    return;
+  }
+  if(e.key === "0"){ e.preventDefault(); assign(null); return; }
+  if(e.key === "Backspace" || e.key === "Delete"){ e.preventDefault(); deleteSelected(); return; }
+  const k = e.key.toLowerCase();
+  if(k === "e"){
+    e.preventDefault();
+    const f = selectedFlat();
+    if(f.length === 1){ editing = f[0].s.id; render(); } else toast("Select a single sentence to edit");
+    return;
+  }
+  if(k === "a"){ e.preventDefault(); selectParagraphOf(anchor || Array.from(sel)[0]); return; }
+  if(k === "j"){ e.preventDefault(); joinSelected(); return; }
+  if(k === "s"){ e.preventDefault(); breakParagraph(); return; }
+});
+
+window.addEventListener("beforeunload", e => {
+  if(!$("#app").classList.contains("on") || !state.paragraphs.length) return;
+  const f = flat();
+  if(f.some(x => !x.s.speakerId)){ e.preventDefault(); e.returnValue = ""; }
+});
+</script>
+</body>
+</html>
